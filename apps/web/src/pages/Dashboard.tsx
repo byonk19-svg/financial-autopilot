@@ -120,6 +120,12 @@ export default function Dashboard() {
           Go to overview
         </Link>
         <Link
+          to="/feed"
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+        >
+          Open autopilot feed
+        </Link>
+        <Link
           to="/transactions"
           className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
         >

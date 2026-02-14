@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import Connect from './pages/Connect'
 import Dashboard from './pages/Dashboard'
+import Feed from './pages/Feed'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Overview from './pages/Overview'
@@ -14,6 +15,7 @@ const links = [
   { to: '/login', label: 'Login' },
   { to: '/connect', label: 'Connect' },
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/feed', label: 'Feed' },
   { to: '/overview', label: 'Overview' },
   { to: '/transactions', label: 'Transactions' },
   { to: '/rules', label: 'Rules' },
@@ -59,6 +61,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/connect" element={<Connect />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/feed" element={<Feed />} />
           <Route path="/overview" element={<Overview />} />
           <Route path="/transactions" element={<Transactions />} />
           <Route path="/rules" element={<Rules />} />
