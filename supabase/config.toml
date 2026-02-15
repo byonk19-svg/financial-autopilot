@@ -394,3 +394,18 @@ verify_jwt = false
 
 [functions.weekly-insights]
 verify_jwt = false
+
+[functions.generate-weekly-insights]
+verify_jwt = false
+
+[functions.analysis-daily]
+verify_jwt = false
+
+[functions.purge-old-data]
+verify_jwt = false
+
+[functions.system-health]
+verify_jwt = false
+
+[functions.recurring]
+verify_jwt = false
