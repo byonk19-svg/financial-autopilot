@@ -1,23 +1,19 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getSupabaseConfig } from "../_shared/env.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const { url: SUPABASE_URL, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing required environment configuration.");
-}
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type";
+const ALLOW_METHODS = "GET, POST, OPTIONS";
+const FUNCTION_NAME = "system-health";
 
 const TRACKED_JOBS = [
   "daily_simplefin_sync",
   "daily_redact_descriptions",
   "weekly-insights",
   "analysis-daily",
+  "subscription-renewal-alerts",
 ];
 
 type CronJobRow = {
@@ -36,10 +32,16 @@ type HealthJob = {
   last_error: string | null;
 };
 
-function json(data: unknown, status = 200): Response {
+function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: {
+      ...getCorsHeaders(req, {
+        allowHeaders: ALLOW_HEADERS,
+        allowMethods: ALLOW_METHODS,
+      }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -52,6 +54,20 @@ function truncate(value: string | null, max = 220): string | null {
   if (!value) return null;
   if (value.length <= max) return value;
   return `${value.slice(0, max)}...`;
+}
+
+function errorInfo(error: unknown): { message: string; stack: string | null } {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack ?? null,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "unknown_error",
+    stack: null,
+  };
 }
 
 async function getCronHealth(admin: ReturnType<typeof createClient>): Promise<{
@@ -134,29 +150,43 @@ async function getCronHealth(admin: ReturnType<typeof createClient>): Promise<{
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req, {
+    allowHeaders: ALLOW_HEADERS,
+    allowMethods: ALLOW_METHODS,
+  });
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "GET" && req.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return json(req, { error: "Method not allowed." }, 405);
   }
 
-  const admin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
   try {
     const cronHealth = await getCronHealth(admin);
 
-    return json({
+    return json(req, {
       ok: true,
       generated_at: new Date().toISOString(),
       jobs: cronHealth.jobs,
       latest_error: cronHealth.latest_error,
     });
   } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "build_system_health",
+      method: req.method,
+      message: details.message,
+      stack: details.stack,
+    }));
     return json(
+      req,
       {
         error: "Could not build system health.",
         detail: error instanceof Error ? error.message : "unknown_error",

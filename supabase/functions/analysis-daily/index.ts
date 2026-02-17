@@ -1,4 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getSupabaseConfig, requireEnv } from "../_shared/env.ts";
 import { sha256Hex } from "../_shared/hash.ts";
 import {
   classifyRecurring,
@@ -11,19 +13,12 @@ import {
 } from "../_shared/merchant.ts";
 import { detectRecurringPattern, type Cadence, type RecurringCharge } from "../_shared/recurring.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const CRON_SECRET = Deno.env.get("CRON_SECRET");
+const { url: SUPABASE_URL, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
+const CRON_SECRET = requireEnv("CRON_SECRET");
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !CRON_SECRET) {
-  throw new Error("Missing required environment configuration.");
-}
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-cron-secret";
+const ALLOW_METHODS = "POST, OPTIONS";
+const FUNCTION_NAME = "analysis-daily";
 
 const LOOKBACK_90_DAYS = 90;
 const LOOKBACK_180_DAYS = 180;
@@ -53,6 +48,7 @@ type TxRow = {
   account_id: string;
   posted_at: string;
   amount: number | string;
+  merchant_canonical: string | null;
   merchant_normalized: string | null;
   description_short: string;
   category_id: string | null;
@@ -141,12 +137,19 @@ type AlertInsert = {
   merchant_normalized: string | null;
   amount: number | null;
   metadata: Record<string, unknown>;
+  reasoning: Record<string, unknown> | null;
 };
 
-function json(data: unknown, status = 200): Response {
+function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: {
+      ...getCorsHeaders(req, {
+        allowHeaders: ALLOW_HEADERS,
+        allowMethods: ALLOW_METHODS,
+      }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -226,6 +229,20 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function errorInfo(error: unknown): { message: string; stack: string | null } {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack ?? null,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "unknown_error",
+    stack: null,
+  };
+}
+
 function normalizeMatchInput(value: string): string {
   return value
     .toLowerCase()
@@ -246,7 +263,14 @@ function matchesRulePattern(matchType: TransactionRuleRow["match_type"], pattern
     try {
       const regex = new RegExp(pattern, "i");
       return regex.test(haystack);
-    } catch {
+    } catch (error) {
+      const details = errorInfo(error);
+      console.error(JSON.stringify({
+        function: FUNCTION_NAME,
+        action: "compile_regex_rule",
+        message: details.message,
+        stack: details.stack,
+      }));
       return false;
     }
   }
@@ -265,7 +289,7 @@ function isDiscretionary(tx: TxRow, categoryNames: Map<string, string>): boolean
     return !isEssentialLabel(categoryNames.get(categoryId)!);
   }
 
-  const merchant = tx.merchant_normalized ?? "";
+  const merchant = tx.merchant_canonical ?? tx.merchant_normalized ?? "";
   if (merchant) {
     return !isEssentialLabel(merchant);
   }
@@ -298,6 +322,11 @@ function formatUsd(value: number): string {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+function feedbackMerchantKey(merchant: string | null): string {
+  const normalized = (merchant ?? "").trim().toLowerCase();
+  return normalized.length > 0 ? normalized : "__unscoped__";
+}
+
 async function listUserIdsWithAccounts(admin: ReturnType<typeof createClient>): Promise<string[]> {
   const { data, error } = await admin.from("accounts").select("user_id");
   if (error) throw new Error("Could not resolve users with accounts.");
@@ -311,7 +340,9 @@ async function fetchTransactions(
 ): Promise<TxRow[]> {
   const { data, error } = await admin
     .from("transactions")
-    .select("id, account_id, posted_at, amount, merchant_normalized, description_short, category_id, user_category_id")
+    .select(
+      "id, account_id, posted_at, amount, merchant_canonical, merchant_normalized, description_short, category_id, user_category_id",
+    )
     .eq("user_id", userId)
     .eq("is_deleted", false)
     .gte("posted_at", since.toISOString())
@@ -476,7 +507,9 @@ async function fetchTransactionRules(
 
 function matchTransactionRule(tx: TxRow, rules: TransactionRuleRow[]): TransactionRuleRow | null {
   const absAmount = Math.abs(toNumber(tx.amount));
-  const haystack = normalizeMatchInput(`${tx.merchant_normalized ?? ""} ${tx.description_short}`);
+  const haystack = normalizeMatchInput(
+    `${tx.merchant_canonical ?? ""} ${tx.merchant_normalized ?? ""} ${tx.description_short}`,
+  );
 
   for (const rule of rules) {
     if (rule.account_id && rule.account_id !== tx.account_id) continue;
@@ -508,10 +541,17 @@ function applyRulesToTransactions(
   const enriched: EnrichedTxRow[] = [];
 
   for (const tx of txRows) {
-    const alias = findMerchantAlias([tx.merchant_normalized, tx.description_short], aliases, tx.account_id);
+    const alias = findMerchantAlias(
+      [tx.merchant_canonical, tx.merchant_normalized, tx.description_short],
+      aliases,
+      tx.account_id,
+    );
     const matchedRule = matchTransactionRule(tx, rules);
 
-    const baseMerchant = matchedRule?.set_merchant_normalized?.trim() || alias?.normalized || tx.merchant_normalized ||
+    const baseMerchant = matchedRule?.set_merchant_normalized?.trim() ||
+      alias?.normalized ||
+      tx.merchant_canonical ||
+      tx.merchant_normalized ||
       tx.description_short;
     const effectiveMerchant = normalizeMerchantForRecurring(baseMerchant);
 
@@ -524,6 +564,7 @@ function applyRulesToTransactions(
 
     enriched.push({
       ...tx,
+      merchant_canonical: tx.merchant_canonical ?? null,
       merchant_normalized: tx.merchant_normalized ?? null,
       user_category_id: matchedRule?.set_spending_category_id ?? tx.user_category_id,
       effective_merchant: effectiveMerchant,
@@ -554,6 +595,7 @@ async function persistTransactionRuleMatches(
       classification_rule_ref: string | null;
       classification_explanation: string | null;
       user_category_id?: string | null;
+      merchant_canonical?: string | null;
       merchant_normalized?: string | null;
     } = {
       classification_rule_ref: row.applied_rule_ref,
@@ -565,6 +607,7 @@ async function persistTransactionRuleMatches(
     }
 
     if (row.rule_forced_merchant && row.effective_merchant && row.effective_merchant !== "UNKNOWN") {
+      updatePayload.merchant_canonical = row.effective_merchant;
       updatePayload.merchant_normalized = row.effective_merchant;
     }
 
@@ -879,7 +922,7 @@ async function upsertSubscriptions(
   const { data: existingRows } = await admin
     .from("subscriptions")
     .select(
-      "merchant_normalized, cadence, price_history, classification, user_locked, classification_rule_ref, classification_explanation",
+      "merchant_normalized, cadence, price_history, classification, user_locked, classification_rule_ref, classification_explanation, is_false_positive",
     )
     .eq("user_id", userId)
     .in("merchant_normalized", merchants);
@@ -890,6 +933,7 @@ async function upsertSubscriptions(
       priceHistory: Array<{ amount: number; charged_at: string }>;
       classification: SubscriptionClassification;
       userLocked: boolean;
+      isFalsePositive: boolean;
       classificationRuleRef: string | null;
       classificationExplanation: string | null;
     }
@@ -901,6 +945,7 @@ async function upsertSubscriptions(
       priceHistory: parsePriceHistory(row.price_history),
       classification: classification ?? "needs_review",
       userLocked: row.user_locked === true,
+      isFalsePositive: row.is_false_positive === true,
       classificationRuleRef: typeof row.classification_rule_ref === "string" ? row.classification_rule_ref : null,
       classificationExplanation: typeof row.classification_explanation === "string"
         ? row.classification_explanation
@@ -925,9 +970,12 @@ async function upsertSubscriptions(
     rulesByMerchant.set(row.merchant_normalized, list);
   }
 
-  const payload = candidates.map((candidate) => {
+  const payload = candidates.flatMap((candidate) => {
     const key = `${candidate.merchant_normalized}:${candidate.cadence}`;
     const existing = existingMap.get(key);
+    if (existing?.isFalsePositive) {
+      return [];
+    }
     const existingHistory = existing?.priceHistory ?? [];
     const priceHistory = upsertPriceHistory(existingHistory, candidate.last_amount, candidate.last_charge_at);
     const matchingRules = rulesByMerchant.get(candidate.merchant_normalized) ?? [];
@@ -946,7 +994,7 @@ async function upsertSubscriptions(
       ? `Matched recurring classification rule ${ruleMatch.id} for ${candidate.merchant_normalized}.`
       : candidate.classification_explanation;
 
-    return {
+    return [{
       ...candidate,
       classification,
       classification_rule_ref: classificationRuleRef,
@@ -954,7 +1002,7 @@ async function upsertSubscriptions(
       price_history: priceHistory,
       is_active: true,
       is_subscription: classification === "subscription",
-    };
+    }];
   });
 
   const { error } = await admin
@@ -965,11 +1013,41 @@ async function upsertSubscriptions(
   return payload.length;
 }
 
+async function filterFalsePositiveCandidates(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  candidates: SubscriptionCandidate[],
+): Promise<SubscriptionCandidate[]> {
+  if (candidates.length === 0) return [];
+
+  const merchants = [...new Set(candidates.map((candidate) => candidate.merchant_normalized))];
+  const { data, error } = await admin
+    .from("subscriptions")
+    .select("merchant_normalized, cadence")
+    .eq("user_id", userId)
+    .eq("is_false_positive", true)
+    .in("merchant_normalized", merchants);
+
+  if (error) {
+    throw new Error("Could not read false-positive subscriptions.");
+  }
+
+  const falsePositiveKeys = new Set<string>();
+  for (const row of data ?? []) {
+    falsePositiveKeys.add(`${row.merchant_normalized}:${row.cadence}`);
+  }
+
+  return candidates.filter((candidate) => {
+    const key = `${candidate.merchant_normalized}:${candidate.cadence}`;
+    return !falsePositiveKeys.has(key);
+  });
+}
+
 async function buildUnusualAlerts(userId: string, tx90: TxRow[], tx180: TxRow[]): Promise<AlertInsert[]> {
   const byMerchant = new Map<string, number[]>();
   for (const tx of tx180) {
     const spend = expenseAmount(tx.amount);
-    const merchant = tx.merchant_normalized ?? "";
+    const merchant = tx.merchant_canonical ?? tx.merchant_normalized ?? "";
     if (spend <= 0 || !merchant) continue;
     const list = byMerchant.get(merchant) ?? [];
     list.push(spend);
@@ -980,7 +1058,7 @@ async function buildUnusualAlerts(userId: string, tx90: TxRow[], tx180: TxRow[])
   for (const tx of tx90) {
     const amount = round2(expenseAmount(tx.amount));
     if (amount <= 0) continue;
-    const merchant = tx.merchant_normalized ?? null;
+    const merchant = tx.merchant_canonical ?? tx.merchant_normalized ?? null;
     const history = merchant ? byMerchant.get(merchant) ?? [] : [];
     const med = history.length >= 5 ? median(history) : 0;
     const isUnusual = amount >= 500 || (history.length >= 5 && med > 0 && amount >= med * 3);
@@ -1001,6 +1079,15 @@ async function buildUnusualAlerts(userId: string, tx90: TxRow[], tx180: TxRow[])
         median: med || null,
         day: toUtcDayKey(tx.posted_at),
       },
+      reasoning: {
+        trigger: history.length >= 5 ? "merchant_median_or_threshold" : "threshold_amount",
+        amount,
+        threshold_amount: 500,
+        merchant_history_count: history.length,
+        merchant_median: med || null,
+        multiplier_threshold: history.length >= 5 ? 3 : null,
+        posted_day: toUtcDayKey(tx.posted_at),
+      },
     });
   }
   return alerts;
@@ -1010,7 +1097,7 @@ async function buildDuplicateAlerts(userId: string, tx90: TxRow[]): Promise<Aler
   const byGroup = new Map<string, number[]>();
   for (const tx of tx90) {
     const amount = round2(expenseAmount(tx.amount));
-    const merchant = tx.merchant_normalized ?? "";
+    const merchant = tx.merchant_canonical ?? tx.merchant_normalized ?? "";
     if (amount <= 0 || !merchant) continue;
     const day = toUtcDayKey(tx.posted_at);
     const key = `${merchant}|${day}`;
@@ -1045,6 +1132,14 @@ async function buildDuplicateAlerts(userId: string, tx90: TxRow[]): Promise<Aler
         merchant_normalized: merchant,
         amount,
         metadata: { day, count: list.length, rounded_amount: roundedAmount },
+        reasoning: {
+          trigger: "same_day_similar_amount",
+          day,
+          merchant,
+          duplicate_count: list.length,
+          rounded_amount: amount,
+          tolerance: 0.5,
+        },
       });
     }
   }
@@ -1082,6 +1177,18 @@ async function buildSubscriptionIncreaseAlerts(
         confidence: sub.confidence,
         delta: round2(delta),
         pct: round2(pct),
+        last_charge_at: sub.last_charge_at,
+      },
+      reasoning: {
+        trigger: "subscription_increase",
+        cadence: sub.cadence,
+        confidence: sub.confidence,
+        previous_amount: round2(sub.prev_amount),
+        last_amount: round2(sub.last_amount),
+        absolute_delta: round2(delta),
+        percent_delta: round2(pct),
+        min_absolute_delta: 1,
+        min_percent_delta: 0.05,
         last_charge_at: sub.last_charge_at,
       },
     });
@@ -1162,6 +1269,17 @@ async function buildPaceAlerts(
         last_month: round2(item.lastMonth),
         ratio: round2(item.ratio),
       },
+      reasoning: {
+        trigger: "projected_monthly_overrun",
+        scope: item.scope,
+        month: currentMonthKey,
+        projected_monthly_spend: round2(item.projected),
+        previous_month_spend: round2(item.lastMonth),
+        projected_ratio: round2(item.ratio),
+        threshold_ratio: 1.15,
+        days_elapsed: daysElapsed,
+        days_in_month: daysInMonth,
+      },
     });
   }
 
@@ -1196,16 +1314,61 @@ async function filterExistingAlerts(
   return alerts.filter((alert) => !existingKeys.has(`${alert.alert_type}:${alert.fingerprint}`));
 }
 
+async function filterAlertsByFeedback(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  alerts: AlertInsert[],
+): Promise<{ alerts: AlertInsert[]; suppressedByFeedback: number }> {
+  if (alerts.length === 0) {
+    return { alerts: [], suppressedByFeedback: 0 };
+  }
+
+  const alertTypes = [...new Set(alerts.map((alert) => alert.alert_type))];
+  const merchantKeys = [...new Set(alerts.map((alert) => feedbackMerchantKey(alert.merchant_normalized)))];
+
+  const { data, error } = await admin
+    .from("alert_feedback")
+    .select("alert_type, merchant_canonical")
+    .eq("user_id", userId)
+    .in("alert_type", alertTypes)
+    .in("merchant_canonical", merchantKeys);
+
+  if (error) {
+    throw new Error("Could not load alert feedback.");
+  }
+
+  const suppressionKeys = new Set<string>();
+  for (const row of data ?? []) {
+    const merchantKey = feedbackMerchantKey(typeof row.merchant_canonical === "string" ? row.merchant_canonical : null);
+    suppressionKeys.add(`${row.alert_type}:${merchantKey}`);
+  }
+
+  const filtered = alerts.filter((alert) => {
+    const merchantKey = feedbackMerchantKey(alert.merchant_normalized);
+    return !suppressionKeys.has(`${alert.alert_type}:${merchantKey}`);
+  });
+
+  return {
+    alerts: filtered,
+    suppressedByFeedback: alerts.length - filtered.length,
+  };
+}
+
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req, {
+    allowHeaders: ALLOW_HEADERS,
+    allowMethods: ALLOW_METHODS,
+  });
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return json(req, { error: "Method not allowed." }, 405);
   }
 
-  const admin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
@@ -1213,7 +1376,7 @@ Deno.serve(async (req) => {
     const requestId = crypto.randomUUID();
     const manualUserId = isCronAuthorized(req) ? null : await resolveManualUserId(admin, req);
     if (!isCronAuthorized(req) && !manualUserId) {
-      return json({ error: "Unauthorized." }, 401);
+      return json(req, { error: "Unauthorized." }, 401);
     }
 
     const users = manualUserId ? [manualUserId] : await listUserIdsWithAccounts(admin);
@@ -1247,7 +1410,8 @@ Deno.serve(async (req) => {
           metricsDaysUpserted += metricsRows.length;
         }
 
-        const subscriptions = buildSubscriptionCandidates(userId, tx180, tx730);
+        const rawSubscriptions = buildSubscriptionCandidates(userId, tx180, tx730);
+        const subscriptions = await filterFalsePositiveCandidates(admin, userId, rawSubscriptions);
         subscriptionsUpserted += await upsertSubscriptions(admin, userId, subscriptions);
 
         const unusualAlerts = await buildUnusualAlerts(userId, tx90, tx180);
@@ -1261,16 +1425,17 @@ Deno.serve(async (req) => {
           ...subscriptionAlerts,
           ...paceAlerts,
         ]);
+        const feedbackFiltered = await filterAlertsByFeedback(admin, userId, pendingAlerts);
 
-        if (pendingAlerts.length > 0) {
+        if (feedbackFiltered.alerts.length > 0) {
           const { error: alertInsertError } = await admin
             .from("alerts")
-            .upsert(pendingAlerts, {
+            .upsert(feedbackFiltered.alerts, {
               onConflict: "user_id,alert_type,fingerprint",
               ignoreDuplicates: true,
             });
           if (alertInsertError) throw new Error("Could not insert alerts.");
-          alertsInserted += pendingAlerts.length;
+          alertsInserted += feedbackFiltered.alerts.length;
         }
 
         usersProcessed += 1;
@@ -1279,22 +1444,25 @@ Deno.serve(async (req) => {
             user_id: userId,
             tx90_count: tx90.length,
             subscriptions_upserted: subscriptions.length,
-            alerts_attempted: pendingAlerts.length,
+            alerts_attempted: feedbackFiltered.alerts.length,
+            alerts_suppressed_by_feedback: feedbackFiltered.suppressedByFeedback,
             metrics_days: metricsRows.length,
           }),
         );
       } catch (error) {
-        console.log(
-          JSON.stringify({
-            user_id: userId,
-            error: "analysis_failed",
-            detail: error instanceof Error ? error.message : "unknown_error",
-          }),
-        );
+        const details = errorInfo(error);
+        console.error(JSON.stringify({
+          function: FUNCTION_NAME,
+          action: "analyze_user",
+          request_id: requestId,
+          user_id: userId,
+          message: details.message,
+          stack: details.stack,
+        }));
       }
     }
 
-    return json({
+    return json(req, {
       ok: true,
       request_id: requestId,
       mode,
@@ -1305,7 +1473,16 @@ Deno.serve(async (req) => {
       metrics_days_upserted: metricsDaysUpserted,
     });
   } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "run_analysis",
+      mode: isCronAuthorized(req) ? "cron" : "manual",
+      message: details.message,
+      stack: details.stack,
+    }));
     return json(
+      req,
       {
         error: "Daily analysis failed.",
         detail: error instanceof Error ? error.message : "unknown_error",

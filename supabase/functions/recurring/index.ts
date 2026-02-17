@@ -1,17 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getSupabaseConfig } from "../_shared/env.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const { url: SUPABASE_URL, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing Supabase environment configuration.");
-}
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type";
+const ALLOW_METHODS = "GET, POST, OPTIONS";
+const FUNCTION_NAME = "recurring";
 
 const ALLOWED_CLASSIFICATIONS = new Set([
   "needs_review",
@@ -32,12 +27,37 @@ type SubscriptionRow = {
   last_amount: number | string | null;
   prev_amount: number | string | null;
   next_expected_at: string | null;
+  notify_days_before: number | null;
   occurrences: number;
   classification: SubscriptionClassification;
+  is_false_positive: boolean;
   user_locked: boolean;
   classified_at: string | null;
   classified_by: string | null;
   updated_at: string;
+};
+
+type HistoryTxRow = {
+  id: string;
+  posted_at: string;
+  amount: number | string;
+  description_short: string;
+  merchant_canonical: string | null;
+  merchant_normalized: string | null;
+  account_id: string;
+  category_id: string | null;
+};
+
+type HistoryResponseRow = {
+  id: string;
+  posted_at: string;
+  amount: number | string;
+  description_short: string;
+  merchant_canonical: string | null;
+  merchant_normalized: string | null;
+  account_id: string;
+  account_name: string | null;
+  category_id: string | null;
 };
 
 type ClassifyBody = {
@@ -55,10 +75,16 @@ class HttpError extends Error {
   }
 }
 
-function json(data: unknown, status = 200): Response {
+function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: {
+      ...getCorsHeaders(req, {
+        allowHeaders: ALLOW_HEADERS,
+        allowMethods: ALLOW_METHODS,
+      }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -80,10 +106,30 @@ function isUuid(input: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input);
 }
 
+function errorInfo(error: unknown): { message: string; stack: string | null } {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack ?? null,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "unknown_error",
+    stack: null,
+  };
+}
+
 function toNumber(value: number | string | null): number | null {
   if (value === null) return null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toInt(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -122,12 +168,13 @@ async function resolveUserId(
 
 async function listRecurring(
   admin: ReturnType<typeof createClient>,
+  req: Request,
   userId: string,
 ): Promise<Response> {
   const { data, error } = await admin
     .from("subscriptions")
     .select(
-      "id, merchant_normalized, cadence, confidence, last_amount, prev_amount, next_expected_at, occurrences, classification, user_locked, classified_at, classified_by, updated_at",
+      "id, merchant_normalized, cadence, confidence, last_amount, prev_amount, next_expected_at, notify_days_before, occurrences, classification, is_false_positive, user_locked, classified_at, classified_by, updated_at",
     )
     .eq("user_id", userId)
     .eq("is_active", true)
@@ -150,7 +197,7 @@ async function listRecurring(
     grouped[key as SubscriptionClassification].push(row);
   }
 
-  return json({
+  return json(req, {
     ok: true,
     grouped,
     counts: {
@@ -161,6 +208,106 @@ async function listRecurring(
       ignore: grouped.ignore.length,
       total: Object.values(grouped).reduce((sum, items) => sum + items.length, 0),
     },
+  });
+}
+
+async function listSubscriptionHistory(
+  admin: ReturnType<typeof createClient>,
+  req: Request,
+  userId: string,
+  recurringId: string,
+): Promise<Response> {
+  if (!isUuid(recurringId)) {
+    throw new HttpError(400, "Invalid recurring pattern id.");
+  }
+
+  const { data: recurring, error: recurringError } = await admin
+    .from("subscriptions")
+    .select("id, merchant_normalized")
+    .eq("id", recurringId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (recurringError) {
+    throw new HttpError(500, "Could not load recurring pattern.");
+  }
+
+  if (!recurring) {
+    throw new HttpError(404, "Recurring pattern not found.");
+  }
+
+  const searchParams = new URL(req.url).searchParams;
+  const requestedLimit = toInt(searchParams.get("limit"));
+  const limit = requestedLimit === null ? 8 : Math.max(6, Math.min(12, requestedLimit));
+
+  const [canonicalResult, normalizedResult] = await Promise.all([
+    admin
+      .from("transactions")
+      .select(
+        "id, posted_at, amount, description_short, merchant_canonical, merchant_normalized, account_id, category_id",
+      )
+      .eq("user_id", userId)
+      .eq("is_deleted", false)
+      .eq("merchant_canonical", recurring.merchant_normalized)
+      .order("posted_at", { ascending: false })
+      .limit(limit),
+    admin
+      .from("transactions")
+      .select(
+        "id, posted_at, amount, description_short, merchant_canonical, merchant_normalized, account_id, category_id",
+      )
+      .eq("user_id", userId)
+      .eq("is_deleted", false)
+      .eq("merchant_normalized", recurring.merchant_normalized)
+      .order("posted_at", { ascending: false })
+      .limit(limit),
+  ]);
+
+  if (canonicalResult.error || normalizedResult.error) {
+    throw new HttpError(500, "Could not load linked transactions.");
+  }
+
+  const merged = new Map<string, HistoryTxRow>();
+  for (const row of (canonicalResult.data ?? []) as HistoryTxRow[]) {
+    merged.set(row.id, row);
+  }
+  for (const row of (normalizedResult.data ?? []) as HistoryTxRow[]) {
+    merged.set(row.id, row);
+  }
+
+  const ordered = [...merged.values()]
+    .sort((a, b) => (a.posted_at > b.posted_at ? -1 : 1))
+    .slice(0, limit);
+
+  const accountIds = [...new Set(ordered.map((row) => row.account_id))];
+  const accountNames = new Map<string, string>();
+  if (accountIds.length > 0) {
+    const { data: accounts, error: accountError } = await admin
+      .from("accounts")
+      .select("id, name")
+      .eq("user_id", userId)
+      .in("id", accountIds);
+
+    if (accountError) {
+      throw new HttpError(500, "Could not load account names.");
+    }
+
+    for (const row of accounts ?? []) {
+      accountNames.set(row.id, row.name);
+    }
+  }
+
+  const history: HistoryResponseRow[] = ordered.map((row) => ({
+    ...row,
+    account_name: accountNames.get(row.account_id) ?? null,
+  }));
+
+  return json(req, {
+    ok: true,
+    recurring_id: recurringId,
+    merchant_normalized: recurring.merchant_normalized,
+    history,
+    count: history.length,
   });
 }
 
@@ -245,7 +392,16 @@ async function classifyRecurring(
   let body: ClassifyBody;
   try {
     body = (await req.json()) as ClassifyBody;
-  } catch {
+  } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "parse_classify_body",
+      user_id: userId,
+      recurring_id: recurringId,
+      message: details.message,
+      stack: details.stack,
+    }));
     throw new HttpError(400, "Invalid JSON body.");
   }
 
@@ -291,7 +447,7 @@ async function classifyRecurring(
     .eq("id", recurringId)
     .eq("user_id", userId)
     .select(
-      "id, merchant_normalized, cadence, confidence, last_amount, prev_amount, next_expected_at, occurrences, classification, user_locked, classified_at, classified_by, updated_at",
+      "id, merchant_normalized, cadence, confidence, last_amount, prev_amount, next_expected_at, notify_days_before, occurrences, classification, is_false_positive, user_locked, classified_at, classified_by, updated_at",
     )
     .single();
 
@@ -322,7 +478,7 @@ async function classifyRecurring(
       create_rule: createRule,
     });
 
-  return json({
+  return json(req, {
     ok: true,
     recurring: updated,
     rule_created: createRule,
@@ -332,35 +488,56 @@ async function classifyRecurring(
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req, {
+    allowHeaders: ALLOW_HEADERS,
+    allowMethods: ALLOW_METHODS,
+  });
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "GET" && req.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return json(req, { error: "Method not allowed." }, 405);
   }
 
-  const admin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
+  let resolvedUserId: string | null = null;
 
   try {
     const userId = await resolveUserId(admin, req);
+    resolvedUserId = userId;
     const routeParts = parseRouteParts(new URL(req.url).pathname);
 
     if (req.method === "GET" && routeParts.length === 0) {
-      return await listRecurring(admin, userId);
+      return await listRecurring(admin, req, userId);
+    }
+
+    if (req.method === "GET" && routeParts.length === 2 && routeParts[1] === "history") {
+      return await listSubscriptionHistory(admin, req, userId, routeParts[0]);
     }
 
     if (req.method === "POST" && routeParts.length === 2 && routeParts[1] === "classify") {
       return await classifyRecurring(admin, userId, routeParts[0], req);
     }
 
-    return json({ error: "Not found." }, 404);
+    return json(req, { error: "Not found." }, 404);
   } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "handle_request",
+      method: req.method,
+      path: new URL(req.url).pathname,
+      user_id: resolvedUserId,
+      message: details.message,
+      stack: details.stack,
+    }));
     if (error instanceof HttpError) {
-      return json({ error: error.message }, error.status);
+      return json(req, { error: error.message }, error.status);
     }
-    return json({ error: "Unhandled recurring handler error." }, 500);
+    return json(req, { error: "Unhandled recurring handler error." }, 500);
   }
 });

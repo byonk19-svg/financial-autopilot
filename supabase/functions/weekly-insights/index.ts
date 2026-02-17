@@ -1,19 +1,14 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getCronSecret, getSupabaseConfig } from "../_shared/env.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const CRON_SECRET = Deno.env.get("CRON_SECRET");
+const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } =
+  getSupabaseConfig();
+const CRON_SECRET = getCronSecret();
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing Supabase environment configuration.");
-}
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-cron-secret";
+const ALLOW_METHODS = "POST, OPTIONS";
+const FUNCTION_NAME = "weekly-insights";
 
 class HttpError extends Error {
   status: number;
@@ -32,10 +27,16 @@ type TransactionRow = {
   user_category_id: string | null;
 };
 
-function json(data: unknown, status = 200): Response {
+function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: {
+      ...getCorsHeaders(req, {
+        allowHeaders: ALLOW_HEADERS,
+        allowMethods: ALLOW_METHODS,
+      }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -85,8 +86,22 @@ function percentChange(current: number, previous: number): string {
   return `${direction} ${Math.abs(pct).toFixed(0)}%`;
 }
 
+function errorInfo(error: unknown): { message: string; stack: string | null } {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack ?? null,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "unknown_error",
+    stack: null,
+  };
+}
+
 async function getManualUserId(jwt: string): Promise<string> {
-  const authClient = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+  const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false },
   });
 
@@ -288,15 +303,20 @@ async function upsertFeedItem(
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req, {
+    allowHeaders: ALLOW_HEADERS,
+    allowMethods: ALLOW_METHODS,
+  });
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return json(req, { error: "Method not allowed." }, 405);
   }
 
-  const adminClient = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
@@ -314,10 +334,19 @@ Deno.serve(async (req) => {
       manualUserId = await getManualUserId(jwt);
     }
   } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "authorize_request",
+      mode,
+      user_id: manualUserId,
+      message: details.message,
+      stack: details.stack,
+    }));
     if (error instanceof HttpError) {
-      return json({ error: error.message }, error.status);
+      return json(req, { error: error.message }, error.status);
     }
-    return json({ error: "Unauthorized." }, 401);
+    return json(req, { error: "Unauthorized." }, 401);
   }
 
   try {
@@ -331,12 +360,21 @@ Deno.serve(async (req) => {
         await upsertFeedItem(adminClient, userId, insight);
         insightsCreated += 1;
       } catch (error) {
+        const details = errorInfo(error);
+        console.error(JSON.stringify({
+          function: FUNCTION_NAME,
+          action: "build_user_weekly_insight",
+          mode,
+          user_id: userId,
+          message: details.message,
+          stack: details.stack,
+        }));
         const message = error instanceof Error ? error.message : "Unknown insight error.";
         warnings.push(`user ${userId}: ${message}`);
       }
     }
 
-    return json({
+    return json(req, {
       ok: true,
       mode,
       usersProcessed: userIds.length,
@@ -344,9 +382,18 @@ Deno.serve(async (req) => {
       warnings,
     });
   } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "run_weekly_insights",
+      mode,
+      user_id: manualUserId,
+      message: details.message,
+      stack: details.stack,
+    }));
     if (error instanceof HttpError) {
-      return json({ error: error.message }, error.status);
+      return json(req, { error: error.message }, error.status);
     }
-    return json({ error: "Insight generation failed." }, 500);
+    return json(req, { error: "Insight generation failed." }, 500);
   }
 });

@@ -3,8 +3,28 @@ import type { FormEvent } from 'react'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { hasActiveSimplefinConnection } from '../lib/bankConnections'
+import { captureException } from '../lib/errorReporting'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
+
+function DollarLogo() {
+  return (
+    <div className="mx-auto flex flex-col items-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden="true">
+          <path
+            d="M12 3v18M15.5 7.5c0-1.4-1.6-2.5-3.5-2.5s-3.5 1.1-3.5 2.5 1.6 2.5 3.5 2.5 3.5 1.1 3.5 2.5-1.6 2.5-3.5 2.5-3.5-1.1-3.5-2.5"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+      <p className="mt-3 text-center text-base font-semibold text-foreground">Financial Autopilot</p>
+    </div>
+  )
+}
 
 export default function Login() {
   const navigate = useNavigate()
@@ -26,7 +46,11 @@ export default function Login() {
       try {
         const isConnected = await hasActiveSimplefinConnection(session.user.id)
         navigate(isConnected ? '/dashboard' : '/connect', { replace: true })
-      } catch {
+      } catch (redirectError) {
+        captureException(redirectError, {
+          component: 'Login',
+          action: 'redirect-after-login',
+        })
         setMessage('Signed in, but failed to check connection status.')
         setStatus('error')
         setRedirecting(false)
@@ -78,19 +102,21 @@ export default function Login() {
 
   if (loading || redirecting) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold text-slate-900">Login</h1>
-        <p className="mt-2 text-sm text-slate-600">Checking your session...</p>
+      <section className="mx-auto max-w-md rounded-xl border border bg-card p-6 shadow-sm">
+        <DollarLogo />
+        <h1 className="mt-5 text-center text-2xl font-semibold text-foreground">Login</h1>
+        <p className="mt-2 text-center text-sm text-muted-foreground">Checking your session...</p>
       </section>
     )
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-semibold text-slate-900">Login</h1>
-      <p className="mt-2 text-sm text-slate-600">Choose a login method.</p>
+    <section className="mx-auto max-w-md rounded-xl border border bg-card p-6 shadow-sm">
+      <DollarLogo />
+      <h1 className="mt-5 text-center text-2xl font-semibold text-foreground">Login</h1>
+      <p className="mt-2 text-center text-sm text-muted-foreground">Choose a login method.</p>
 
-      <div className="mt-4 inline-flex rounded-lg border border-slate-300 p-1">
+      <div className="mt-4 inline-flex w-full rounded-lg border border p-1">
         <button
           type="button"
           onClick={() => {
@@ -98,8 +124,10 @@ export default function Login() {
             setMessage('')
             setStatus('idle')
           }}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-            mode === 'password' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors-fast ${
+            mode === 'password'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-transparent text-muted-foreground hover:bg-accent'
           }`}
         >
           Password
@@ -111,8 +139,10 @@ export default function Login() {
             setMessage('')
             setStatus('idle')
           }}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-            mode === 'magic' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors-fast ${
+            mode === 'magic'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-transparent text-muted-foreground hover:bg-accent'
           }`}
         >
           Magic Link
@@ -120,23 +150,25 @@ export default function Login() {
       </div>
 
       <form className="mt-6 space-y-4" onSubmit={mode === 'password' ? submitPasswordLogin : submitMagicLink}>
-        <label className="block text-sm font-medium text-slate-700" htmlFor="email">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="you@example.com"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-cyan-500 transition focus:ring-2"
-        />
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-foreground" htmlFor="email">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@example.com"
+            className="w-full rounded-lg border border px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+          />
+        </div>
 
         {mode === 'password' && (
-          <>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="password">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-foreground" htmlFor="password">
               Password
             </label>
             <input
@@ -146,40 +178,38 @@ export default function Login() {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none ring-cyan-500 transition focus:ring-2"
+              className="w-full rounded-lg border border px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
             />
-          </>
+          </div>
         )}
 
         <button
           type="submit"
           disabled={status === 'sending'}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors-fast hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {status === 'sending'
             ? mode === 'password'
               ? 'Signing in...'
               : 'Sending...'
             : mode === 'password'
-            ? 'Sign In'
-            : 'Send Magic Link'}
+              ? 'Sign In'
+              : 'Send Magic Link'}
         </button>
       </form>
 
       {mode === 'password' ? (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-muted-foreground">
           If you do not have a password yet, set one in Supabase Dashboard &gt; Authentication &gt; Users.
         </p>
       ) : (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-muted-foreground">
           Use magic link when email delivery is configured and not rate-limited.
         </p>
       )}
 
       {message && (
-        <p className={`mt-4 text-sm ${status === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>
-          {message}
-        </p>
+        <p className={`mt-4 text-sm ${status === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>{message}</p>
       )}
     </section>
   )

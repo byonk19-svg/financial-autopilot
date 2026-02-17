@@ -27,6 +27,72 @@ function fromBase64(input: string): Uint8Array {
   return output;
 }
 
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  if (hex.length % 2 !== 0) {
+    throw new Error("Invalid hex input length.");
+  }
+  const output = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    const parsed = Number.parseInt(hex.slice(i, i + 2), 16);
+    if (Number.isNaN(parsed)) {
+      throw new Error("Invalid hex input data.");
+    }
+    output[i / 2] = parsed;
+  }
+  return output;
+}
+
+export function encodeByteaFromString(value: string): string {
+  return `\\x${bytesToHex(encoder.encode(value))}`;
+}
+
+export function decodeByteaToString(value: string): string {
+  if (!value || typeof value !== "string") {
+    throw new Error("Invalid bytea value.");
+  }
+
+  if (!value.startsWith("\\x")) {
+    return value;
+  }
+
+  const normalized = value.slice(2);
+  return decoder.decode(hexToBytes(normalized));
+}
+
+export function serializeEncryptedPayload(payload: EncryptedPayload): string {
+  return JSON.stringify(payload);
+}
+
+export function parseSerializedEncryptedPayload(serialized: string): EncryptedPayload {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    const [ivB64, ciphertextB64] = serialized.split(":", 2);
+    if (ivB64 && ciphertextB64) {
+      return { ivB64, ciphertextB64 };
+    }
+    throw new Error("Invalid serialized encrypted payload.");
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Invalid encrypted payload.");
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const ivB64 = typeof record.ivB64 === "string" ? record.ivB64 : "";
+  const ciphertextB64 = typeof record.ciphertextB64 === "string" ? record.ciphertextB64 : "";
+  if (!ivB64 || !ciphertextB64) {
+    throw new Error("Encrypted payload missing ivB64/ciphertextB64.");
+  }
+
+  return { ivB64, ciphertextB64 };
+}
+
 async function importAesKey(secret: string): Promise<CryptoKey> {
   if (!secret || secret.length < 32) {
     throw new Error("SIMPLEFIN_ENC_KEY must be at least 32 characters.");

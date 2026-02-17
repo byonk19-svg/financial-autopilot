@@ -1,4 +1,6 @@
-export type SubscriptionCadence = 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'unknown'
+import type { SubscriptionCadence } from '@/lib/types'
+
+export type { SubscriptionCadence } from '@/lib/types'
 export type DensityMode = 'comfortable' | 'compact'
 
 export function toNumber(value: number | string | null): number {
@@ -28,6 +30,49 @@ export function toShortDate(value: string | null): string {
 
 export function toCadenceLabel(value: SubscriptionCadence): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+export function toMonthlyEquivalentAmount(input: {
+  lastAmount: number | string | null
+  cadence: SubscriptionCadence
+}): number {
+  const amount = toNumber(input.lastAmount)
+  if (amount <= 0) return 0
+  if (input.cadence === 'weekly') return amount * (52 / 12)
+  if (input.cadence === 'monthly') return amount
+  if (input.cadence === 'quarterly') return amount / 3
+  if (input.cadence === 'yearly') return amount / 12
+  return amount
+}
+
+export function defaultNotifyDaysForCadence(cadence: SubscriptionCadence): number {
+  return cadence === 'yearly' ? 7 : 3
+}
+
+export function effectiveNotifyDays(input: {
+  cadence: SubscriptionCadence
+  notifyDaysBefore: number | null
+}): number {
+  const provided = input.notifyDaysBefore
+  if (typeof provided === 'number' && Number.isFinite(provided) && provided > 0) return Math.round(provided)
+  return defaultNotifyDaysForCadence(input.cadence)
+}
+
+export function daysUntilDate(value: string | null): number | null {
+  const date = parseDate(value)
+  if (!date) return null
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  return Math.round((target - today) / (24 * 60 * 60 * 1000))
+}
+
+export function toRenewalLabel(value: string | null): string {
+  const days = daysUntilDate(value)
+  if (days === null) return 'Unknown'
+  if (days === 0) return 'Renews today'
+  if (days > 0) return `Renews in ${days} day${days === 1 ? '' : 's'}`
+  return `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`
 }
 
 export function hasPriceIncrease(input: {

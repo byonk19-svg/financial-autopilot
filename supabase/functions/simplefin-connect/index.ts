@@ -1,30 +1,27 @@
-import { createClient } from "@supabase/supabase-js";
-import { encryptString } from "../_shared/crypto.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { encodeByteaFromString, encryptString, serializeEncryptedPayload } from "../_shared/crypto.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getSimplefinConfig, getSupabaseConfig } from "../_shared/env.ts";
 import { exchangeSetupToken } from "../_shared/simplefin.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const SIMPLEFIN_ENC_KEY = Deno.env.get("SIMPLEFIN_ENC_KEY");
+const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } =
+  getSupabaseConfig();
+const { encKey: SIMPLEFIN_ENC_KEY, encKid: SIMPLEFIN_ENC_KID } = getSimplefinConfig();
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing Supabase environment configuration.");
-}
+const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-cron-secret";
+const ALLOW_METHODS = "POST, OPTIONS";
+const FUNCTION_NAME = "simplefin-connect";
 
-if (!SIMPLEFIN_ENC_KEY) {
-  throw new Error("Missing SIMPLEFIN_ENC_KEY.");
-}
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(data: unknown, status = 200): Response {
+function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: {
+      ...getCorsHeaders(req, {
+        allowHeaders: ALLOW_HEADERS,
+        allowMethods: ALLOW_METHODS,
+      }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -37,18 +34,37 @@ function getBearerToken(req: Request): string | null {
   return authHeader.slice("Bearer ".length).trim();
 }
 
+function errorInfo(error: unknown): { message: string; stack: string | null } {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack ?? null,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "unknown_error",
+    stack: null,
+  };
+}
+
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req, {
+    allowHeaders: ALLOW_HEADERS,
+    allowMethods: ALLOW_METHODS,
+  });
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return json(req, { error: "Method not allowed." }, 405);
   }
 
   const jwt = getBearerToken(req);
   if (!jwt) {
-    return json({ error: "Unauthorized." }, 401);
+    return json(req, { error: "Unauthorized." }, 401);
   }
 
   const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -60,25 +76,35 @@ Deno.serve(async (req) => {
 
   const { data: authData, error: authError } = await authClient.auth.getUser(jwt);
   if (authError || !authData.user) {
-    return json({ error: "Unauthorized." }, 401);
+    return json(req, { error: "Unauthorized." }, 401);
   }
 
+  const userId = authData.user.id;
   let setupToken = "";
   try {
     const body = await req.json();
     setupToken = typeof body.setupToken === "string" ? body.setupToken.trim() : "";
-  } catch {
-    return json({ error: "Invalid request body." }, 400);
+  } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "parse_request_body",
+      user_id: userId,
+      message: details.message,
+      stack: details.stack,
+    }));
+    return json(req, { error: "Invalid request body." }, 400);
   }
 
   if (!setupToken) {
-    return json({ error: "setupToken is required." }, 400);
+    return json(req, { error: "setupToken is required." }, 400);
   }
 
   try {
     const accessUrl = await exchangeSetupToken(setupToken);
     const encrypted = await encryptString(accessUrl, SIMPLEFIN_ENC_KEY);
-    const userId = authData.user.id;
+    const serializedEncryptedToken = serializeEncryptedPayload(encrypted);
+    const tokenEnc = encodeByteaFromString(serializedEncryptedToken);
 
     const { data: existingConnections, error: selectError } = await adminClient
       .from("bank_connections")
@@ -89,7 +115,7 @@ Deno.serve(async (req) => {
       .limit(1);
 
     if (selectError) {
-      return json({ error: "Could not read bank connection." }, 500);
+      return json(req, { error: "Could not read bank connection." }, 500);
     }
 
     const existingConnectionId = existingConnections?.[0]?.id;
@@ -99,6 +125,8 @@ Deno.serve(async (req) => {
         .from("bank_connections")
         .update({
           status: "active",
+          token_enc: tokenEnc,
+          token_kid: SIMPLEFIN_ENC_KID,
           access_url_ciphertext: encrypted.ciphertextB64,
           access_url_iv: encrypted.ivB64,
           enc_version: 1,
@@ -107,7 +135,7 @@ Deno.serve(async (req) => {
         .eq("id", existingConnectionId);
 
       if (updateError) {
-        return json({ error: "Could not update bank connection." }, 500);
+        return json(req, { error: "Could not update bank connection." }, 500);
       }
     } else {
       const { error: insertError } = await adminClient
@@ -116,18 +144,28 @@ Deno.serve(async (req) => {
           user_id: userId,
           provider: "simplefin",
           status: "active",
+          token_enc: tokenEnc,
+          token_kid: SIMPLEFIN_ENC_KID,
           access_url_ciphertext: encrypted.ciphertextB64,
           access_url_iv: encrypted.ivB64,
           enc_version: 1,
         });
 
       if (insertError) {
-        return json({ error: "Could not create bank connection." }, 500);
+        return json(req, { error: "Could not create bank connection." }, 500);
       }
     }
 
-    return json({ ok: true });
-  } catch {
-    return json({ error: "Failed to connect bank account." }, 500);
+    return json(req, { ok: true });
+  } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "connect_flow",
+      user_id: userId,
+      message: details.message,
+      stack: details.stack,
+    }));
+    return json(req, { error: "Failed to connect bank account." }, 500);
   }
 });

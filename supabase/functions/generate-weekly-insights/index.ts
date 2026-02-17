@@ -1,18 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { getSupabaseConfig, requireEnv } from "../_shared/env.ts";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const CRON_SECRET = Deno.env.get("CRON_SECRET");
+const { url: SUPABASE_URL, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
+const CRON_SECRET = requireEnv("CRON_SECRET");
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !CRON_SECRET) {
-  throw new Error("Missing required environment configuration.");
-}
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-cron-secret";
+const ALLOW_METHODS = "POST, OPTIONS";
+const FUNCTION_NAME = "generate-weekly-insights";
 
 type InsightType = "pattern" | "opportunity" | "projection";
 
@@ -48,10 +43,16 @@ type InsightDraft = {
   data: Record<string, unknown>;
 };
 
-function json(data: unknown, status = 200): Response {
+function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: {
+      ...getCorsHeaders(req, {
+        allowHeaders: ALLOW_HEADERS,
+        allowMethods: ALLOW_METHODS,
+      }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -167,6 +168,20 @@ function truncateList(items: string[], maxItems: number): string {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function errorInfo(error: unknown): { message: string; stack: string | null } {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack ?? null,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : "unknown_error",
+    stack: null,
+  };
 }
 
 async function buildPatternInsight(
@@ -470,19 +485,24 @@ async function buildUserInsights(
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req, {
+    allowHeaders: ALLOW_HEADERS,
+    allowMethods: ALLOW_METHODS,
+  });
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (req.method !== "POST") {
-    return json({ error: "Method not allowed." }, 405);
+    return json(req, { error: "Method not allowed." }, 405);
   }
 
   if (!isCronRequest(req)) {
-    return json({ error: "Unauthorized." }, 401);
+    return json(req, { error: "Unauthorized." }, 401);
   }
 
-  const admin = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
@@ -492,7 +512,7 @@ Deno.serve(async (req) => {
       .select("user_id");
 
     if (accountError) {
-      return json({ error: "Could not resolve users." }, 500);
+      return json(req, { error: "Could not resolve users." }, 500);
     }
 
     const userIds = [...new Set((accountRows ?? []).map((row) => row.user_id).filter(Boolean))];
@@ -531,12 +551,20 @@ Deno.serve(async (req) => {
 
         usersProcessed += 1;
         insightsUpserted += payload.length;
-      } catch {
+      } catch (error) {
+        const details = errorInfo(error);
+        console.error(JSON.stringify({
+          function: FUNCTION_NAME,
+          action: "build_user_insights",
+          user_id: userId,
+          message: details.message,
+          stack: details.stack,
+        }));
         warnings.push(`user ${userId}: failed`);
       }
     }
 
-    return json({
+    return json(req, {
       ok: true,
       users_processed: usersProcessed,
       users_with_accounts: userIds.length,
@@ -545,7 +573,14 @@ Deno.serve(async (req) => {
       week_of_basis: "date_trunc(week, America/Chicago)",
       warnings,
     });
-  } catch {
-    return json({ error: "Weekly insight generation failed." }, 500);
+  } catch (error) {
+    const details = errorInfo(error);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "run_weekly_generation",
+      message: details.message,
+      stack: details.stack,
+    }));
+    return json(req, { error: "Weekly insight generation failed." }, 500);
   }
 });
