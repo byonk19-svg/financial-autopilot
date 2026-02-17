@@ -94,8 +94,8 @@ export function parseSerializedEncryptedPayload(serialized: string): EncryptedPa
 }
 
 async function importAesKey(secret: string): Promise<CryptoKey> {
-  if (!secret || secret.length < 32) {
-    throw new Error("SIMPLEFIN_ENC_KEY must be at least 32 characters.");
+  if (!secret || secret.trim().length === 0) {
+    throw new Error("SIMPLEFIN_ENC_KEY is required.");
   }
 
   const secretDigest = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
