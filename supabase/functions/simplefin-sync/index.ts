@@ -32,8 +32,6 @@ type ConnectionRow = {
   user_id: string;
   token_enc: string | null;
   token_kid: string | null;
-  access_url_ciphertext: string | null;
-  access_url_iv: string | null;
 };
 
 type AccountRow = {
@@ -43,11 +41,6 @@ type AccountRow = {
 type UserPreference = {
   rawDescriptionDays: number;
   retentionMonths: number;
-};
-
-type ConnectionEncryptedPayload = {
-  payload: { ciphertextB64: string; ivB64: string };
-  source: "token_enc" | "legacy";
 };
 
 function json(req: Request, data: unknown, status = 200): Response {
@@ -193,7 +186,7 @@ function parseTransactions(accountObject: Record<string, unknown>): Record<strin
 }
 
 function getBearerToken(req: Request): string | null {
-  const header = req.headers.get("Authorization") ?? "";
+  const header = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   if (!header.startsWith("Bearer ")) {
     return null;
   }
@@ -238,51 +231,28 @@ function getUniqueDecryptSecrets(
   return [...new Set(candidates.filter((value) => typeof value === "string" && value.length > 0))];
 }
 
-function getConnectionEncryptedPayloads(connection: ConnectionRow): ConnectionEncryptedPayload[] {
-  const payloads: ConnectionEncryptedPayload[] = [];
-
-  if (connection.token_enc) {
-    try {
-      const serializedPayload = decodeByteaToString(connection.token_enc);
-      payloads.push({
-        payload: parseSerializedEncryptedPayload(serializedPayload),
-        source: "token_enc",
-      });
-    } catch {
-      // Ignore and allow legacy fallback.
-    }
-  }
-
-  if (connection.access_url_ciphertext && connection.access_url_iv) {
-    payloads.push({
-      payload: {
-        ciphertextB64: connection.access_url_ciphertext,
-        ivB64: connection.access_url_iv,
-      },
-      source: "legacy",
-    });
-  }
-
-  return payloads;
-}
-
-async function decryptAccessUrl(connection: ConnectionRow): Promise<{ accessUrl: string; source: string }> {
-  const payloads = getConnectionEncryptedPayloads(connection);
-  if (payloads.length === 0) {
+async function decryptAccessUrl(connection: ConnectionRow): Promise<string> {
+  if (!connection.token_enc) {
     throw new Error("No encrypted SimpleFIN token payload available.");
+  }
+
+  let payload: { ciphertextB64: string; ivB64: string };
+  try {
+    const serializedPayload = decodeByteaToString(connection.token_enc);
+    payload = parseSerializedEncryptedPayload(serializedPayload);
+  } catch {
+    throw new Error("Invalid encrypted SimpleFIN token payload.");
   }
 
   const secrets = getUniqueDecryptSecrets(connection.token_kid);
   let lastError: unknown = null;
 
-  for (const payload of payloads) {
-    for (const secret of secrets) {
-      try {
-        const accessUrl = await decryptString(payload.payload, secret);
-        return { accessUrl, source: payload.source };
-      } catch (error) {
-        lastError = error;
-      }
+  for (const secret of secrets) {
+    try {
+      const accessUrl = await decryptString(payload, secret);
+      return accessUrl;
+    } catch (error) {
+      lastError = error;
     }
   }
 
@@ -471,7 +441,7 @@ Deno.serve(async (req) => {
   try {
     let connectionsQuery = adminClient
       .from("bank_connections")
-      .select("id, user_id, token_enc, token_kid, access_url_ciphertext, access_url_iv")
+      .select("id, user_id, token_enc, token_kid")
       .eq("provider", "simplefin")
       .eq("status", "active");
 
@@ -496,7 +466,7 @@ Deno.serve(async (req) => {
     const warnings: string[] = [];
 
     for (const connection of safeConnections) {
-      if (!connection.token_enc && (!connection.access_url_ciphertext || !connection.access_url_iv)) {
+      if (!connection.token_enc) {
         continue;
       }
 
@@ -507,8 +477,7 @@ Deno.serve(async (req) => {
       const rawDescriptionDays = userPreference.rawDescriptionDays;
       let accessUrl = "";
       try {
-        const decrypted = await decryptAccessUrl(connection);
-        accessUrl = decrypted.accessUrl;
+        accessUrl = await decryptAccessUrl(connection);
       } catch (decryptError) {
         const details = errorInfo(decryptError);
         warnings.push(`Could not decrypt connection ${connection.id}: ${details.message}`);

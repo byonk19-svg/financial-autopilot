@@ -27,11 +27,16 @@ export default function Dashboard() {
     syncing,
     message,
     error,
+    sessionExpired,
     onSyncNow,
   } = useDashboard(session?.user?.id)
 
   useEffect(() => {
     if (loading) return
+    if (sessionExpired) {
+      navigate('/login', { replace: true })
+      return
+    }
     if (!session?.user) {
       navigate('/login', { replace: true })
       return
@@ -39,7 +44,7 @@ export default function Dashboard() {
     if (needsConnection) {
       navigate('/connect', { replace: true })
     }
-  }, [loading, navigate, needsConnection, session])
+  }, [loading, navigate, needsConnection, session, sessionExpired])
 
   const handleSyncNowClick = useCallback(() => {
     void onSyncNow()

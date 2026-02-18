@@ -409,7 +409,7 @@ export function SubscriptionRow({
                         <div className="min-w-0">
                           <p className="truncate text-foreground">{row.description_short}</p>
                           <p className={`text-muted-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
-                            {toShortDate(row.posted_at)} • {row.account_name ?? 'Unknown account'}
+                            {toShortDate(row.posted_at)} | {row.account_name ?? 'Unknown account'}
                           </p>
                         </div>
                         <p className="font-medium text-foreground">

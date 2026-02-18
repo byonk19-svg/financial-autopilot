@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getAccessToken } from '@/lib/auth'
 import { hasActiveSimplefinConnection } from '@/lib/bankConnections'
 import { captureException } from '@/lib/errorReporting'
-import { functionUrl } from '@/lib/functions'
+import { AuthExpiredError, fetchFunctionWithAuth } from '@/lib/fetchWithAuth'
 import { toNumber } from '@/lib/subscriptionFormatters'
 import { supabase } from '@/lib/supabase'
 
@@ -142,12 +141,13 @@ export function useDashboard(userId: string | undefined) {
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [sessionExpired, setSessionExpired] = useState(false)
 
   const loadDashboardData = useCallback(async () => {
     if (!userId) return
 
     const [kpisResult, renewalsResult, anomaliesResult, accountsResult, analysisResult, insightsResult] =
-      await Promise.all([
+      await Promise.allSettled([
         supabase.rpc('dashboard_kpis', {
           start_date: monthStartDate(),
           end_date: todayDate(),
@@ -175,31 +175,80 @@ export function useDashboard(userId: string | undefined) {
           .maybeSingle(),
       ])
 
-    if (
-      kpisResult.error ||
-      renewalsResult.error ||
-      anomaliesResult.error ||
-      accountsResult.error ||
-      analysisResult.error ||
-      insightsResult.error
-    ) {
-      setError('Could not load dashboard metrics.')
+    let loadFailed = false
+
+    if (kpisResult.status === 'fulfilled' && !kpisResult.value.error) {
+      setKpis(normalizeKpis((kpisResult.value.data ?? null) as DashboardKpisRpc | null))
+    } else {
+      loadFailed = true
+      captureException(kpisResult.status === 'rejected' ? kpisResult.reason : kpisResult.value.error, {
+        component: 'useDashboard',
+        action: 'load-dashboard-kpis',
+      })
+    }
+
+    if (renewalsResult.status === 'fulfilled' && !renewalsResult.value.error) {
+      setUpcomingRenewals((renewalsResult.value.data ?? []) as DashboardRenewalRow[])
+    } else {
+      loadFailed = true
+      captureException(renewalsResult.status === 'rejected' ? renewalsResult.reason : renewalsResult.value.error, {
+        component: 'useDashboard',
+        action: 'load-upcoming-renewals',
+      })
+    }
+
+    if (anomaliesResult.status === 'fulfilled' && !anomaliesResult.value.error) {
+      setAnomalies((anomaliesResult.value.data ?? []) as DashboardAnomalyRow[])
+    } else {
+      loadFailed = true
+      captureException(anomaliesResult.status === 'rejected' ? anomaliesResult.reason : anomaliesResult.value.error, {
+        component: 'useDashboard',
+        action: 'load-anomalies',
+      })
+    }
+
+    if (accountsResult.status === 'fulfilled' && !accountsResult.value.error) {
+      const accountRows = (accountsResult.value.data ?? []) as AccountSyncRow[]
+      setLastAccountSyncAt(
+        accountRows
+          .map((row) => row.last_synced_at)
+          .filter((value): value is string => Boolean(value))
+          .sort((a, b) => (a > b ? -1 : 1))[0] ?? null,
+      )
+    } else {
+      loadFailed = true
+      captureException(accountsResult.status === 'rejected' ? accountsResult.reason : accountsResult.value.error, {
+        component: 'useDashboard',
+        action: 'load-account-sync-at',
+      })
+    }
+
+    if (analysisResult.status === 'fulfilled' && !analysisResult.value.error) {
+      setLastAnalysisAt(analysisResult.value.data?.updated_at ?? null)
+    } else {
+      loadFailed = true
+      captureException(analysisResult.status === 'rejected' ? analysisResult.reason : analysisResult.value.error, {
+        component: 'useDashboard',
+        action: 'load-last-analysis-at',
+      })
+    }
+
+    if (insightsResult.status === 'fulfilled' && !insightsResult.value.error) {
+      setLastWeeklyInsightsAt(insightsResult.value.data?.created_at ?? null)
+    } else {
+      loadFailed = true
+      captureException(insightsResult.status === 'rejected' ? insightsResult.reason : insightsResult.value.error, {
+        component: 'useDashboard',
+        action: 'load-last-weekly-insights-at',
+      })
+    }
+
+    if (loadFailed) {
+      setError('Some dashboard metrics could not be loaded.')
       return
     }
 
-    setKpis(normalizeKpis((kpisResult.data ?? null) as DashboardKpisRpc | null))
-    setUpcomingRenewals((renewalsResult.data ?? []) as DashboardRenewalRow[])
-    setAnomalies((anomaliesResult.data ?? []) as DashboardAnomalyRow[])
-
-    const accountRows = (accountsResult.data ?? []) as AccountSyncRow[]
-    setLastAccountSyncAt(
-      accountRows
-        .map((row) => row.last_synced_at)
-        .filter((value): value is string => Boolean(value))
-        .sort((a, b) => (a > b ? -1 : 1))[0] ?? null,
-    )
-    setLastAnalysisAt(analysisResult.data?.updated_at ?? null)
-    setLastWeeklyInsightsAt(insightsResult.data?.created_at ?? null)
+    setError('')
   }, [userId])
 
   const loadSystemHealth = useCallback(async () => {
@@ -207,30 +256,35 @@ export function useDashboard(userId: string | undefined) {
     setHealthError('')
 
     try {
-      const { data, error: invokeError } = await supabase.functions.invoke('system-health', {
-        body: {},
+      const response = await fetchFunctionWithAuth('system-health', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
       })
 
-      if (invokeError) {
-        const maybeContext = invokeError as { context?: Response; message?: string }
-        if (maybeContext.context) {
-          const payload = (await maybeContext.context.json().catch(() => null)) as
-            | { error?: string; detail?: string }
-            | null
-          if (payload?.detail) throw new Error(payload.detail)
-          if (payload?.error) throw new Error(payload.error)
-          const text = await maybeContext.context.text().catch(() => '')
-          if (text) throw new Error(text)
-        }
-        throw new Error(invokeError.message ?? 'Could not load system health.')
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; detail?: string; ok?: boolean }
+        | SystemHealthPayload
+        | null
+      if (!response.ok) {
+        throw new Error(
+          (payload && typeof payload === 'object' && ('detail' in payload || 'error' in payload))
+            ? (payload.detail ?? payload.error ?? 'Could not load system health.')
+            : 'Could not load system health.',
+        )
       }
 
-      const health = (data ?? null) as SystemHealthPayload | null
+      const health = (payload ?? null) as SystemHealthPayload | null
       if (!health || health.ok !== true) {
         throw new Error('Could not load system health.')
       }
       setSystemHealth(health)
     } catch (healthLoadError) {
+      if (healthLoadError instanceof AuthExpiredError) {
+        setSessionExpired(true)
+      }
       captureException(healthLoadError, {
         component: 'useDashboard',
         action: 'load-system-health',
@@ -284,18 +338,13 @@ export function useDashboard(userId: string | undefined) {
     setSyncing(true)
     setMessage('')
     setError('')
+    setSessionExpired(false)
 
     try {
-      const token = await getAccessToken()
-      if (!token) {
-        throw new Error('Your session expired. Please log in again.')
-      }
-
-      const response = await fetch(functionUrl('simplefin-sync'), {
+      const response = await fetchFunctionWithAuth('simplefin-sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({}),
       })
@@ -312,6 +361,13 @@ export function useDashboard(userId: string | undefined) {
       }
 
       const warnings = payload.warnings ?? []
+      const hasConnectionWarning = warnings.some((warning) => /decrypt|token|unauthorized/i.test(warning))
+      if (hasConnectionWarning) {
+        setMessage('')
+        setError('Sync could not read your bank connection. Please reconnect SimpleFIN from the Connect page.')
+        setNeedsConnection(true)
+        return
+      }
       const warningText = warnings.length > 0 ? ` Warnings: ${warnings.slice(0, 2).join(' | ')}` : ''
       setMessage(
         `Sync complete. Accounts synced: ${payload.accountsSynced ?? 0}, transactions synced: ${
@@ -320,6 +376,9 @@ export function useDashboard(userId: string | undefined) {
       )
       await refreshAll()
     } catch (syncError) {
+      if (syncError instanceof AuthExpiredError) {
+        setSessionExpired(true)
+      }
       captureException(syncError, {
         component: 'useDashboard',
         action: 'sync-now',
@@ -352,6 +411,7 @@ export function useDashboard(userId: string | undefined) {
     syncing,
     message,
     error,
+    sessionExpired,
     onSyncNow,
   }
 }

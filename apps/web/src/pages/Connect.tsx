@@ -1,11 +1,9 @@
 import type { FormEvent } from 'react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getAccessToken } from '@/lib/auth'
 import { hasActiveSimplefinConnection } from '../lib/bankConnections'
 import { captureException } from '../lib/errorReporting'
-import { functionUrl } from '../lib/functions'
-import { supabase } from '../lib/supabase'
+import { fetchFunctionWithAuth } from '../lib/fetchWithAuth'
 import { useSession } from '../lib/session'
 
 function LinkIcon() {
@@ -69,21 +67,10 @@ export default function Connect() {
     setMessage('')
 
     try {
-      const currentSessionToken = session?.access_token ?? null
-      const token = currentSessionToken ?? (await getAccessToken())
-      if (!token) {
-        await supabase.auth.signOut({ scope: 'local' })
-        navigate('/login', { replace: true })
-        throw new Error('Your session expired. Please log in again.')
-      }
-
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-      const response = await fetch(functionUrl('simplefin-connect'), {
+      const response = await fetchFunctionWithAuth('simplefin-connect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          ...(anonKey ? { apikey: anonKey } : {}),
         },
         body: JSON.stringify({ setupToken: setupToken.trim() }),
       })
@@ -116,6 +103,9 @@ export default function Connect() {
       const text = error instanceof Error ? error.message : 'Connect request failed.'
       setStatus('error')
       setMessage(text)
+      if (text.includes('Please log in again')) {
+        navigate('/login', { replace: true })
+      }
     }
   }
 

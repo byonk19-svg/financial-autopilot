@@ -48,7 +48,7 @@ SimpleFIN credentials are stored in `public.bank_connections` using:
 - `token_enc bytea`: serialized encrypted payload bytes (AES-GCM ciphertext + IV envelope)
 - `token_kid text`: key version used to encrypt that row
 
-Legacy columns (`access_url_ciphertext`, `access_url_iv`) are still written for backward compatibility, but new reads prefer `token_enc`.
+Legacy columns (`access_url_ciphertext`, `access_url_iv`) are deprecated and removed by migration `0036_drop_legacy_simplefin_token_columns.sql`; reads/writes now use `token_enc` only.
 
 ### Required secrets
 

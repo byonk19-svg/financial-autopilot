@@ -11,8 +11,6 @@ const { encKey: SIMPLEFIN_ENC_KEY, encKid: SIMPLEFIN_ENC_KID } = getSimplefinCon
 const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-cron-secret";
 const ALLOW_METHODS = "POST, OPTIONS";
 const FUNCTION_NAME = "simplefin-connect";
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -28,7 +26,7 @@ function json(req: Request, data: unknown, status = 200): Response {
 }
 
 function getBearerToken(req: Request): string | null {
-  const authHeader = req.headers.get("Authorization") ?? "";
+  const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
     return null;
   }
@@ -48,45 +46,6 @@ function errorInfo(error: unknown): { message: string; stack: string | null } {
     message: typeof error === "string" ? error : "unknown_error",
     stack: null,
   };
-}
-
-function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
-  const segments = jwt.split(".");
-  if (segments.length < 2) {
-    return null;
-  }
-
-  try {
-    const payloadSegment = segments[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = payloadSegment.padEnd(payloadSegment.length + (4 - (payloadSegment.length % 4)) % 4, "=");
-    const json = atob(padded);
-    const parsed = JSON.parse(json);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return null;
-    }
-    return parsed as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function getUserIdFromJwtPayload(payload: Record<string, unknown> | null): string | null {
-  if (!payload) {
-    return null;
-  }
-
-  const sub = typeof payload.sub === "string" ? payload.sub : "";
-  const exp = typeof payload.exp === "number" ? payload.exp : 0;
-  const nowSeconds = Math.floor(Date.now() / 1000);
-
-  if (!UUID_PATTERN.test(sub)) {
-    return null;
-  }
-  if (!exp || exp <= nowSeconds) {
-    return null;
-  }
-
-  return sub;
 }
 
 Deno.serve(async (req) => {
@@ -125,10 +84,6 @@ Deno.serve(async (req) => {
     if (!adminAuthError && adminAuthData.user) {
       userId = adminAuthData.user.id;
     } else {
-      const jwtFallbackUserId = getUserIdFromJwtPayload(decodeJwtPayload(jwt));
-      if (jwtFallbackUserId) {
-        userId = jwtFallbackUserId;
-      } else {
       const authDetails = errorInfo(authError ?? adminAuthError ?? "Unauthorized.");
       console.error(JSON.stringify({
         function: FUNCTION_NAME,
@@ -137,7 +92,6 @@ Deno.serve(async (req) => {
         stack: authDetails.stack,
       }));
       return json(req, { error: "Unauthorized." }, 401);
-      }
     }
   }
   let setupToken = "";
@@ -189,8 +143,6 @@ Deno.serve(async (req) => {
           status: "active",
           token_enc: tokenEnc,
           token_kid: SIMPLEFIN_ENC_KID,
-          access_url_ciphertext: encrypted.ciphertextB64,
-          access_url_iv: encrypted.ivB64,
           enc_version: 1,
           updated_at: new Date().toISOString(),
         })
@@ -209,8 +161,6 @@ Deno.serve(async (req) => {
           status: "active",
           token_enc: tokenEnc,
           token_kid: SIMPLEFIN_ENC_KID,
-          access_url_ciphertext: encrypted.ciphertextB64,
-          access_url_iv: encrypted.ivB64,
           enc_version: 1,
         });
 
