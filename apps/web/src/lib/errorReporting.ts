@@ -1,3 +1,5 @@
+import * as Sentry from '@sentry/react'
+
 type ErrorContext = Record<string, string>
 
 type NormalizedError = {
@@ -35,8 +37,15 @@ export function captureException(error: unknown, context: ErrorContext = {}): vo
     return
   }
 
-  // TODO: send `payload` to Sentry or another production error tracking service.
-  console.error('[error-reporting]', payload)
+  const sentryError =
+    error instanceof Error ? error : new Error(typeof error === 'string' ? error : normalized.message)
+
+  Sentry.captureException(sentryError, {
+    tags: {
+      source: 'error-reporting',
+    },
+    extra: payload,
+  })
 }
 
 export function captureMessage(message: string, level: 'info' | 'warning' | 'error'): void {
@@ -47,15 +56,26 @@ export function captureMessage(message: string, level: 'info' | 'warning' | 'err
     timestamp: new Date().toISOString(),
   }
 
-  if (level === 'error') {
-    console.error('[error-reporting]', payload)
+  if (import.meta.env.DEV) {
+    if (level === 'error') {
+      console.error('[error-reporting]', payload)
+      return
+    }
+
+    if (level === 'warning') {
+      console.warn('[error-reporting]', payload)
+      return
+    }
+
+    console.info('[error-reporting]', payload)
     return
   }
 
-  if (level === 'warning') {
-    console.warn('[error-reporting]', payload)
-    return
-  }
-
-  console.info('[error-reporting]', payload)
+  Sentry.captureMessage(message, {
+    level: level === 'warning' ? 'warning' : level === 'error' ? 'error' : 'info',
+    tags: {
+      source: 'error-reporting',
+    },
+    extra: payload,
+  })
 }

@@ -1,8 +1,10 @@
 import type { FormEvent } from 'react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { getAccessToken } from '@/lib/auth'
 import { hasActiveSimplefinConnection } from '../lib/bankConnections'
 import { captureException } from '../lib/errorReporting'
+import { functionUrl } from '../lib/functions'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 
@@ -67,39 +69,31 @@ export default function Connect() {
     setMessage('')
 
     try {
-      const { data: refreshData } = await supabase.auth.refreshSession()
-      const activeSession = refreshData.session ?? (await supabase.auth.getSession()).data.session
-
-      if (!activeSession?.access_token) {
+      const currentSessionToken = session?.access_token ?? null
+      const token = currentSessionToken ?? (await getAccessToken())
+      if (!token) {
+        await supabase.auth.signOut({ scope: 'local' })
+        navigate('/login', { replace: true })
         throw new Error('Your session expired. Please log in again.')
       }
 
-      supabase.functions.setAuth(activeSession.access_token)
-
-      const { error } = await supabase.functions.invoke('simplefin-connect', {
-        body: { setupToken: setupToken.trim() },
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+      const response = await fetch(functionUrl('simplefin-connect'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(anonKey ? { apikey: anonKey } : {}),
+        },
+        body: JSON.stringify({ setupToken: setupToken.trim() }),
       })
 
-      if (error) {
-        const errorLike = error as { message?: string; context?: Response }
-        let detail = 'Connect request failed.'
-
-        if (errorLike.context instanceof Response) {
-          const payload = (await errorLike.context.json().catch(() => null)) as { error?: string } | null
-          if (payload?.error) {
-            detail = payload.error
-          }
-        } else if (errorLike.message) {
-          detail = errorLike.message
+      const payload = (await response.json().catch(() => ({}))) as { error?: string }
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Unauthorized. Please log in again.')
         }
-
-        if (errorLike.context instanceof Response && errorLike.context.status === 401) {
-          detail = 'Unauthorized. Please log in again.'
-        } else if (detail.toLowerCase().includes('unauthorized')) {
-          detail = 'Unauthorized. Please log in again.'
-        }
-
-        throw new Error(detail)
+        throw new Error(payload.error ?? 'Connect request failed.')
       }
 
       setStatus('success')

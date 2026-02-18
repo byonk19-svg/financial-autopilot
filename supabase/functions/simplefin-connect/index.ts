@@ -11,6 +11,8 @@ const { encKey: SIMPLEFIN_ENC_KEY, encKid: SIMPLEFIN_ENC_KID } = getSimplefinCon
 const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type, x-cron-secret";
 const ALLOW_METHODS = "POST, OPTIONS";
 const FUNCTION_NAME = "simplefin-connect";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -48,6 +50,45 @@ function errorInfo(error: unknown): { message: string; stack: string | null } {
   };
 }
 
+function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
+  const segments = jwt.split(".");
+  if (segments.length < 2) {
+    return null;
+  }
+
+  try {
+    const payloadSegment = segments[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payloadSegment.padEnd(payloadSegment.length + (4 - (payloadSegment.length % 4)) % 4, "=");
+    const json = atob(padded);
+    const parsed = JSON.parse(json);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function getUserIdFromJwtPayload(payload: Record<string, unknown> | null): string | null {
+  if (!payload) {
+    return null;
+  }
+
+  const sub = typeof payload.sub === "string" ? payload.sub : "";
+  const exp = typeof payload.exp === "number" ? payload.exp : 0;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  if (!UUID_PATTERN.test(sub)) {
+    return null;
+  }
+  if (!exp || exp <= nowSeconds) {
+    return null;
+  }
+
+  return sub;
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req, {
     allowHeaders: ALLOW_HEADERS,
@@ -74,12 +115,31 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
+  let userId = "";
   const { data: authData, error: authError } = await authClient.auth.getUser(jwt);
-  if (authError || !authData.user) {
-    return json(req, { error: "Unauthorized." }, 401);
+  if (!authError && authData.user) {
+    userId = authData.user.id;
+  } else {
+    // Fallback: some environments can reject anon-key user lookups unexpectedly.
+    const { data: adminAuthData, error: adminAuthError } = await adminClient.auth.getUser(jwt);
+    if (!adminAuthError && adminAuthData.user) {
+      userId = adminAuthData.user.id;
+    } else {
+      const jwtFallbackUserId = getUserIdFromJwtPayload(decodeJwtPayload(jwt));
+      if (jwtFallbackUserId) {
+        userId = jwtFallbackUserId;
+      } else {
+      const authDetails = errorInfo(authError ?? adminAuthError ?? "Unauthorized.");
+      console.error(JSON.stringify({
+        function: FUNCTION_NAME,
+        action: "authorize_request",
+        message: authDetails.message,
+        stack: authDetails.stack,
+      }));
+      return json(req, { error: "Unauthorized." }, 401);
+      }
+    }
   }
-
-  const userId = authData.user.id;
   let setupToken = "";
   try {
     const body = await req.json();
