@@ -88,7 +88,16 @@ export default function Connect() {
         body: JSON.stringify({ setupToken: setupToken.trim() }),
       })
 
-      const payload = (await response.json().catch(() => ({}))) as { error?: string }
+      let payload: { error?: string } = {}
+      try {
+        payload = (await response.json()) as { error?: string }
+      } catch {
+        const raw = await response.text().catch(() => '')
+        captureException(new Error(`Response body is not JSON (status ${response.status}): ${raw.slice(0, 300)}`), {
+          component: 'Connect',
+          action: 'parse-response-body',
+        })
+      }
       if (!response.ok) {
         if (response.status === 401) {
           throw new Error('Unauthorized. Please log in again.')
