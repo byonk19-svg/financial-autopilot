@@ -27,6 +27,19 @@ type AlertRow = {
 
 type AlertSeverityFilter = 'all' | AlertRow['severity']
 type AlertTypeFilter = 'all' | AlertRow['alert_type']
+type AlertFeedbackRow = {
+  alert_type: AlertRow['alert_type']
+  merchant_canonical: string
+  is_expected: boolean
+  created_at: string
+}
+type AlertFeedbackMap = Record<
+  string,
+  {
+    isExpected: boolean
+    createdAt: string
+  }
+>
 
 const ALERT_TYPE_OPTIONS: Array<{ value: AlertTypeFilter; label: string }> = [
   { value: 'all', label: 'All types' },
@@ -41,6 +54,10 @@ const ALERT_TYPE_OPTIONS: Array<{ value: AlertTypeFilter; label: string }> = [
 function toFeedbackMerchantCanonical(merchant: string | null): string {
   const normalized = (merchant ?? '').trim().toLowerCase()
   return normalized.length > 0 ? normalized : '__unscoped__'
+}
+
+function toAlertFeedbackKey(alertType: AlertRow['alert_type'], merchantCanonical: string): string {
+  return `${alertType}::${merchantCanonical}`
 }
 
 function humanizeReasoningKey(key: string): string {
@@ -161,6 +178,7 @@ export default function Alerts() {
   const [typeFilter, setTypeFilter] = useState<AlertTypeFilter>('all')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [expandedIds, setExpandedIds] = useState<string[]>([])
+  const [feedbackByKey, setFeedbackByKey] = useState<AlertFeedbackMap>({})
 
   const loadAlerts = useCallback(async () => {
     if (!session?.user) return
@@ -203,6 +221,41 @@ export default function Alerts() {
       const visible = new Set(rows.map((row) => row.id))
       return current.filter((id) => visible.has(id))
     })
+
+    if (rows.length === 0) {
+      setFeedbackByKey({})
+      setFetching(false)
+      return
+    }
+
+    const alertTypes = [...new Set(rows.map((row) => row.alert_type))]
+    const merchants = [...new Set(rows.map((row) => toFeedbackMerchantCanonical(row.merchant_normalized)))]
+
+    const { data: feedbackData, error: feedbackError } = await supabase
+      .from('alert_feedback')
+      .select('alert_type, merchant_canonical, is_expected, created_at')
+      .eq('user_id', session.user.id)
+      .in('alert_type', alertTypes)
+      .in('merchant_canonical', merchants)
+
+    if (feedbackError) {
+      captureException(feedbackError, {
+        component: 'Alerts',
+        action: 'load-feedback',
+      })
+      setError('Could not load alert feedback.')
+      setFeedbackByKey({})
+      setFetching(false)
+      return
+    }
+
+    const feedbackMap = ((feedbackData ?? []) as AlertFeedbackRow[]).reduce<AlertFeedbackMap>((acc, row) => {
+      const key = toAlertFeedbackKey(row.alert_type, row.merchant_canonical)
+      acc[key] = { isExpected: row.is_expected, createdAt: row.created_at }
+      return acc
+    }, {})
+
+    setFeedbackByKey(feedbackMap)
     setFetching(false)
   }, [session?.user, unreadOnly, severityFilter, typeFilter])
 
@@ -312,28 +365,44 @@ export default function Alerts() {
     )
   }, [])
 
-  const dismissAfterFeedback = useCallback(
+  const getFeedbackKeyForAlert = useCallback((alert: AlertRow) => {
+    const merchantCanonical = toFeedbackMerchantCanonical(alert.merchant_normalized)
+    return toAlertFeedbackKey(alert.alert_type, merchantCanonical)
+  }, [])
+
+  const removeFeedback = useCallback(
     async (alert: AlertRow) => {
       if (!session?.user) return
-      const { error: dismissError } = await supabase
-        .from('alerts')
-        .update({ is_dismissed: true, read_at: alert.read_at ?? new Date().toISOString() })
-        .eq('id', alert.id)
-        .eq('user_id', session.user.id)
+      const merchantCanonical = toFeedbackMerchantCanonical(alert.merchant_normalized)
+      const feedbackKey = toAlertFeedbackKey(alert.alert_type, merchantCanonical)
 
-      if (dismissError) {
-        captureException(dismissError, {
+      setUpdatingId(alert.id)
+      setError('')
+
+      const { error: deleteError } = await supabase
+        .from('alert_feedback')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('alert_type', alert.alert_type)
+        .eq('merchant_canonical', merchantCanonical)
+
+      if (deleteError) {
+        captureException(deleteError, {
           component: 'Alerts',
-          action: 'dismiss-after-feedback',
+          action: 'remove-feedback',
           alert_id: alert.id,
         })
-        setError('Feedback saved, but the alert could not be dismissed automatically.')
+        setError('Could not remove feedback.')
+        setUpdatingId('')
         return
       }
 
-      setAlerts((current) => current.filter((row) => row.id !== alert.id))
-      setSelectedIds((current) => current.filter((id) => id !== alert.id))
-      setExpandedIds((current) => current.filter((id) => id !== alert.id))
+      setFeedbackByKey((current) => {
+        const next = { ...current }
+        delete next[feedbackKey]
+        return next
+      })
+      setUpdatingId('')
     },
     [session?.user],
   )
@@ -341,15 +410,29 @@ export default function Alerts() {
   const submitFeedback = useCallback(
     async (alert: AlertRow, isExpected: boolean) => {
       if (!session?.user) return
+      const merchantCanonical = toFeedbackMerchantCanonical(alert.merchant_normalized)
+      const feedbackKey = toAlertFeedbackKey(alert.alert_type, merchantCanonical)
+      const existingFeedback = feedbackByKey[feedbackKey]
+
+      if (existingFeedback && existingFeedback.isExpected === isExpected) {
+        await removeFeedback(alert)
+        return
+      }
+
       setUpdatingId(alert.id)
       setError('')
 
-      const { error: feedbackError } = await supabase.from('alert_feedback').insert({
-        user_id: session.user.id,
-        alert_type: alert.alert_type,
-        merchant_canonical: toFeedbackMerchantCanonical(alert.merchant_normalized),
-        is_expected: isExpected,
-      })
+      const createdAt = new Date().toISOString()
+      const { error: feedbackError } = await supabase.from('alert_feedback').upsert(
+        {
+          user_id: session.user.id,
+          alert_type: alert.alert_type,
+          merchant_canonical: merchantCanonical,
+          is_expected: isExpected,
+          created_at: createdAt,
+        },
+        { onConflict: 'user_id,alert_type,merchant_canonical' },
+      )
 
       if (feedbackError) {
         captureException(feedbackError, {
@@ -362,10 +445,13 @@ export default function Alerts() {
         return
       }
 
-      await dismissAfterFeedback(alert)
+      setFeedbackByKey((current) => ({
+        ...current,
+        [feedbackKey]: { isExpected, createdAt },
+      }))
       setUpdatingId('')
     },
-    [dismissAfterFeedback, session?.user],
+    [feedbackByKey, removeFeedback, session?.user],
   )
 
   const runBulkMarkRead = useCallback(async () => {
@@ -562,13 +648,19 @@ export default function Alerts() {
             <p className="mt-3 text-base font-medium text-foreground">All clear - no active alerts</p>
           </div>
         ) : (
-          alerts.map((alert) => (
-            <article
-              key={alert.id}
-              className={`rounded-xl border p-5 shadow-sm ${
-                alert.read_at ? 'border bg-card' : 'border-primary/20 bg-primary/5'
-              }`}
-            >
+          alerts.map((alert) => {
+            const feedbackKey = getFeedbackKeyForAlert(alert)
+            const feedbackForAlert = feedbackByKey[feedbackKey]
+            const expectedSelected = feedbackForAlert?.isExpected === true
+            const falsePositiveSelected = feedbackForAlert?.isExpected === false
+
+            return (
+              <article
+                key={alert.id}
+                className={`rounded-xl border p-5 shadow-sm ${
+                  alert.read_at ? 'border bg-card' : 'border-primary/20 bg-primary/5'
+                }`}
+              >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <input
@@ -620,17 +712,39 @@ export default function Alerts() {
                 <button
                   onClick={() => void submitFeedback(alert, true)}
                   disabled={updatingId === alert.id || bulkUpdating !== ''}
-                  className="rounded-lg border border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors-fast disabled:cursor-not-allowed disabled:opacity-60 ${
+                    expectedSelected
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                      : 'border text-foreground hover:bg-muted'
+                  }`}
                 >
-                  {updatingId === alert.id ? 'Saving...' : 'Expected'}
+                  {updatingId === alert.id ? 'Saving...' : expectedSelected ? 'Expected (saved)' : 'Expected'}
                 </button>
                 <button
                   onClick={() => void submitFeedback(alert, false)}
                   disabled={updatingId === alert.id || bulkUpdating !== ''}
-                  className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition-colors-fast hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors-fast disabled:cursor-not-allowed disabled:opacity-60 ${
+                    falsePositiveSelected
+                      ? 'border-rose-300 bg-rose-50 text-rose-700'
+                      : 'border-rose-200 text-rose-700 hover:bg-rose-50'
+                  }`}
                 >
-                  {updatingId === alert.id ? 'Saving...' : 'False positive'}
+                  {updatingId === alert.id
+                    ? 'Saving...'
+                    : falsePositiveSelected
+                      ? 'False positive (saved)'
+                      : 'False positive'}
                 </button>
+                {feedbackForAlert && (
+                  <button
+                    type="button"
+                    onClick={() => void removeFeedback(alert)}
+                    disabled={updatingId === alert.id || bulkUpdating !== ''}
+                    className="rounded-lg border border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {updatingId === alert.id ? 'Saving...' : 'Remove feedback'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => toggleReasoning(alert.id)}
@@ -643,6 +757,12 @@ export default function Alerts() {
               {expandedIds.includes(alert.id) && (
                 <div className="mt-4 rounded-lg border border bg-background/70 p-3">
                   <h3 className="text-sm font-semibold text-foreground">Why did this fire?</h3>
+                  {feedbackForAlert && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Feedback saved: {feedbackForAlert.isExpected ? 'Expected' : 'False positive'} on{' '}
+                      {new Date(feedbackForAlert.createdAt).toLocaleString()}.
+                    </p>
+                  )}
                   {alert.reasoning && Object.keys(alert.reasoning).length > 0 ? (
                     <dl className="mt-2 grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
                       {Object.entries(alert.reasoning).map(([key, value]) => (
@@ -659,8 +779,9 @@ export default function Alerts() {
                   )}
                 </div>
               )}
-            </article>
-          ))
+              </article>
+            )
+          })
         )}
       </div>
 

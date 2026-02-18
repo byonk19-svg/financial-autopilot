@@ -94,6 +94,10 @@ export function parseSerializedEncryptedPayload(serialized: string): EncryptedPa
 }
 
 async function importAesKey(secret: string): Promise<CryptoKey> {
+  // Any non-empty SIMPLEFIN_ENC_KEY length is acceptable here because we always
+  // normalize operator input through a SHA-256 digest before importing it as
+  // the raw AES-256 key material. Operators should still use a high-entropy
+  // secret (32+ random characters recommended) to keep brute-force risk low.
   if (!secret || secret.trim().length === 0) {
     throw new Error("SIMPLEFIN_ENC_KEY is required.");
   }

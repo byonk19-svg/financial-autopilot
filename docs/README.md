@@ -53,7 +53,7 @@ Legacy columns (`access_url_ciphertext`, `access_url_iv`) are still written for 
 ### Required secrets
 
 ```powershell
-supabase secrets set SIMPLEFIN_ENC_KEY="YOUR_ACTIVE_32+_CHAR_KEY"
+supabase secrets set SIMPLEFIN_ENC_KEY="YOUR_ACTIVE_RANDOM_KEY"
 supabase secrets set SIMPLEFIN_ENC_KID="v1"
 ```
 
@@ -66,6 +66,8 @@ supabase secrets set SIMPLEFIN_ENC_KEYS_JSON="{\"v1\":\"old_key_here\",\"v2\":\"
 Notes:
 
 - `SIMPLEFIN_ENC_KEY` + `SIMPLEFIN_ENC_KID` is the active encrypt key pair.
+- `SIMPLEFIN_ENC_KEY` can be any non-empty length because runtime key material is SHA-256 normalized before AES-GCM use.
+- For security, use a high-entropy key (32+ random characters recommended).
 - `SIMPLEFIN_ENC_KEYS_JSON` is used as a decrypt keyring by `token_kid`.
 - Active key pair is always injected into the keyring at runtime.
 
