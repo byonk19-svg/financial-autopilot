@@ -180,6 +180,8 @@ Deno.serve(async (req) => {
 
     const existingConnectionId = existingConnections?.[0]?.id;
 
+    const action = existingConnectionId ? "updated" : "created";
+
     if (existingConnectionId) {
       const { error: updateError } = await adminClient
         .from("bank_connections")
@@ -192,7 +194,8 @@ Deno.serve(async (req) => {
           enc_version: 1,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", existingConnectionId);
+        .eq("id", existingConnectionId)
+        .eq("user_id", userId);
 
       if (updateError) {
         return json(req, { error: "Could not update bank connection." }, 500);
@@ -216,7 +219,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json(req, { ok: true });
+    return json(req, { ok: true, action });
   } catch (error) {
     const details = errorInfo(error);
     console.error(JSON.stringify({

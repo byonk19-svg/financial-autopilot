@@ -33,7 +33,7 @@ function bytesToHex(bytes: Uint8Array): string {
 
 function hexToBytes(hex: string): Uint8Array {
   if (hex.length % 2 !== 0) {
-    throw new Error("Invalid hex input length.");
+    throw new Error(`Invalid hex input length: ${hex.length}.`);
   }
   const output = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
@@ -84,11 +84,14 @@ export function parseSerializedEncryptedPayload(serialized: string): EncryptedPa
   }
 
   const record = parsed as Record<string, unknown>;
-  const ivB64 = typeof record.ivB64 === "string" ? record.ivB64 : "";
-  const ciphertextB64 = typeof record.ciphertextB64 === "string" ? record.ciphertextB64 : "";
-  if (!ivB64 || !ciphertextB64) {
-    throw new Error("Encrypted payload missing ivB64/ciphertextB64.");
+  if (typeof record.ivB64 !== "string" || !record.ivB64) {
+    throw new Error("Encrypted payload missing ivB64.");
   }
+  if (typeof record.ciphertextB64 !== "string" || !record.ciphertextB64) {
+    throw new Error("Encrypted payload missing ciphertextB64.");
+  }
+  const ivB64 = record.ivB64;
+  const ciphertextB64 = record.ciphertextB64;
 
   return { ivB64, ciphertextB64 };
 }

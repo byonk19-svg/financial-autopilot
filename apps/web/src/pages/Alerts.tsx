@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toNumber } from '../lib/subscriptionFormatters'
 import { captureException } from '../lib/errorReporting'
@@ -179,9 +179,11 @@ export default function Alerts() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [expandedIds, setExpandedIds] = useState<string[]>([])
   const [feedbackByKey, setFeedbackByKey] = useState<AlertFeedbackMap>({})
+  const fetchVersionRef = useRef(0)
 
   const loadAlerts = useCallback(async () => {
     if (!session?.user) return
+    const version = ++fetchVersionRef.current
     setFetching(true)
     setError('')
 
@@ -203,6 +205,8 @@ export default function Alerts() {
     }
 
     const { data, error: fetchError } = await query
+
+    if (version !== fetchVersionRef.current) return
 
     if (fetchError) {
       captureException(fetchError, {
@@ -237,6 +241,8 @@ export default function Alerts() {
       .eq('user_id', session.user.id)
       .in('alert_type', alertTypes)
       .in('merchant_canonical', merchants)
+
+    if (version !== fetchVersionRef.current) return
 
     if (feedbackError) {
       captureException(feedbackError, {
@@ -301,9 +307,8 @@ export default function Alerts() {
       return
     }
 
-    void loadAlerts()
     setUpdatingId('')
-  }, [alerts, loadAlerts, selectedIds, session?.user])
+  }, [alerts, selectedIds, session?.user])
 
   const dismissAlert = useCallback(async (alert: AlertRow) => {
     if (!session?.user) return
