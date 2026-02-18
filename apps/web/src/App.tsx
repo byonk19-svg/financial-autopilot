@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
-import Connect from './pages/Connect'
-import Dashboard from './pages/Dashboard'
 import Alerts from './pages/Alerts'
 import ClassificationRules from './pages/ClassificationRules'
+import Connect from './pages/Connect'
+import Dashboard from './pages/Dashboard'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Overview from './pages/Overview'
@@ -12,9 +12,9 @@ import Rules from './pages/Rules'
 import Settings from './pages/Settings'
 import Subscriptions from './pages/Subscriptions'
 import Transactions from './pages/Transactions'
-import { supabase } from './lib/supabase'
-import { useSession } from './lib/session'
 import { captureException } from './lib/errorReporting'
+import { useSession } from './lib/session'
+import { supabase } from './lib/supabase'
 
 type NavItem = { to: string; label: string }
 type NavGroup = { label: string; items: NavItem[] }
@@ -64,17 +64,13 @@ export default function App() {
   }
 
   const isActive = (to: string): boolean => {
-    if (to === '/') {
-      return location.pathname === '/'
-    }
+    if (to === '/') return location.pathname === '/'
     return location.pathname.startsWith(to)
   }
 
   const navItemClass = (to: string): string =>
     `inline-flex rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors-fast ${
-      isActive(to)
-        ? 'bg-primary/10 text-primary'
-        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+      isActive(to) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
     }`
 
   const onNavClick = () => {
@@ -84,17 +80,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center gap-4">
             <Link to="/" onClick={onNavClick} className="inline-flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  aria-hidden="true"
-                >
+                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                   <path
                     d="M12 4V20M16 7.5C16 6.12 14.21 5 12 5C9.79 5 8 6.12 8 7.5C8 8.88 9.79 10 12 10C14.21 10 16 11.12 16 12.5C16 13.88 14.21 15 12 15C9.79 15 8 13.88 8 12.5"
                     stroke="currentColor"
@@ -104,9 +94,7 @@ export default function App() {
                   />
                 </svg>
               </div>
-              <div>
-                <p className="text-sm font-semibold leading-none text-foreground">Financial Autopilot</p>
-              </div>
+              <p className="text-sm font-semibold leading-none text-foreground sm:text-base">Financial Autopilot</p>
             </Link>
 
             <nav className="hidden items-center lg:flex" aria-label="Primary">
@@ -127,7 +115,10 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             {!session && (
-              <Link to="/login" className="hidden rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground sm:inline-flex">
+              <Link
+                to="/login"
+                className="hidden rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground sm:inline-flex"
+              >
                 Log in
               </Link>
             )}
@@ -154,20 +145,13 @@ export default function App() {
 
         {mobileNavOpen && (
           <div className="border-t border-border bg-card lg:hidden">
-            <nav className="mx-auto max-w-7xl space-y-4 px-6 py-4" aria-label="Mobile navigation">
+            <nav className="mx-auto max-w-7xl space-y-4 px-4 py-3 sm:px-6 sm:py-4" aria-label="Mobile navigation">
               {navGroups.map((group) => (
                 <section key={group.label}>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {group.label}
-                  </p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</p>
                   <div className="flex flex-col gap-1">
                     {group.items.map((item) => (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        onClick={onNavClick}
-                        className={navItemClass(item.to)}
-                      >
+                      <Link key={item.to} to={item.to} onClick={onNavClick} className={navItemClass(item.to)}>
                         {item.label}
                       </Link>
                     ))}
@@ -201,7 +185,7 @@ export default function App() {
         )}
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         <ErrorBoundary>
           <Routes>
             <Route path="/" element={<Dashboard />} />
