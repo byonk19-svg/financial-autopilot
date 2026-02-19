@@ -1,11 +1,12 @@
 import { useMemo } from 'react'
 
 export type TransactionFilterChip = {
-  key: 'date_range' | 'account' | 'category' | 'search'
+  key: 'view' | 'date_range' | 'account' | 'category' | 'search'
   label: string
 }
 
 type UseTransactionFilterChipsParams = {
+  viewPresetLabel: string | null
   startDate: string
   endDate: string
   accountFilter: string
@@ -23,6 +24,7 @@ function formatDateRangeLabel(startDate: string, endDate: string): string | null
 }
 
 export function useTransactionFilterChips({
+  viewPresetLabel,
   startDate,
   endDate,
   accountFilter,
@@ -33,6 +35,13 @@ export function useTransactionFilterChips({
 }: UseTransactionFilterChipsParams) {
   const chips = useMemo(() => {
     const nextChips: TransactionFilterChip[] = []
+
+    if (viewPresetLabel) {
+      nextChips.push({
+        key: 'view',
+        label: viewPresetLabel,
+      })
+    }
 
     const dateLabel = formatDateRangeLabel(startDate, endDate)
     if (dateLabel) {
@@ -65,7 +74,7 @@ export function useTransactionFilterChips({
     }
 
     return nextChips
-  }, [accountFilter, accountNameById, categoryFilter, categoryNameById, endDate, search, startDate])
+  }, [accountFilter, accountNameById, categoryFilter, categoryNameById, endDate, search, startDate, viewPresetLabel])
 
   return {
     chips,

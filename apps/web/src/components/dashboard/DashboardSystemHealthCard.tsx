@@ -1,14 +1,41 @@
-import { ActivityIcon } from '@/components/dashboard/DashboardIcons'
-import type { SystemHealthPayload } from '@/hooks/useDashboard'
-import { formatDateTime, statusDot, statusTone } from '@/hooks/useDashboard'
+import { ActivityIcon } from "@/components/dashboard/DashboardIcons";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { SystemHealthPayload } from "@/hooks/useDashboard";
+import { statusDot, statusTone } from "@/hooks/useDashboard";
+import { formatShortDateTime } from "@/lib/formatting";
 
 type DashboardSystemHealthCardProps = {
-  healthLoading: boolean
-  healthError: string
-  systemHealth: SystemHealthPayload | null
-  lastAccountSyncAt: string | null
-  lastAnalysisAt: string | null
-  lastWeeklyInsightsAt: string | null
+  healthLoading: boolean;
+  healthError: string;
+  systemHealth: SystemHealthPayload | null;
+  lastAccountSyncAt: string | null;
+  lastAnalysisAt: string | null;
+  lastWeeklyInsightsAt: string | null;
+};
+
+function formatStatusLabel(status: string | null): string {
+  if (!status) return "Unknown";
+  return status.replace(/[_-]+/g, " ").trim();
+}
+
+function statusBadgeClass(status: string | null): string {
+  const normalized = (status ?? "").toLowerCase();
+  if (normalized.includes("succeeded")) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (normalized.includes("running")) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (normalized.includes("failed") || normalized.includes("error")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (normalized.includes("missing") || normalized.includes("unavailable")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  return "border-border bg-muted text-muted-foreground";
 }
 
 export function DashboardSystemHealthCard({
@@ -20,73 +47,134 @@ export function DashboardSystemHealthCard({
   lastWeeklyInsightsAt,
 }: DashboardSystemHealthCardProps) {
   return (
-    <section className="rounded-xl border border bg-card p-5 shadow-sm" aria-labelledby="system-health-heading">
-      <h3
-        id="system-health-heading"
-        className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
-      >
-        <ActivityIcon className="h-4 w-4 text-primary/80" />
-        System Health
-      </h3>
-      {healthLoading ? (
-        <div className="mt-3 space-y-2" aria-live="polite" aria-busy="true">
-          <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-          <div className="h-4 w-2/3 animate-pulse rounded bg-muted/70" />
-          <div className="h-4 w-1/2 animate-pulse rounded bg-muted/70" />
-        </div>
-      ) : (
-        <>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-muted-foreground">Last account sync</dt>
-              <dd className="text-foreground">{formatDateTime(lastAccountSyncAt)}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-muted-foreground">Last analysis run</dt>
-              <dd className="text-foreground">{formatDateTime(lastAnalysisAt)}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <dt className="text-muted-foreground">Last weekly insights run</dt>
-              <dd className="text-foreground">{formatDateTime(lastWeeklyInsightsAt)}</dd>
-            </div>
-          </dl>
-
-          <div className="mt-3 rounded-lg border border bg-muted/30 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Latest Error</p>
-            <p className="mt-1 text-sm text-foreground">{systemHealth?.latest_error ?? 'None'}</p>
-          </div>
-
-          <div className="mt-3 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Job Status</p>
-            {systemHealth?.jobs?.map((job) => (
-              <div key={job.job_name} className="rounded-lg border border bg-card p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-foreground">{job.job_name}</p>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`h-2 w-2 rounded-full ${statusDot(job.last_status)}`} />
-                    <span className={`text-xs font-medium ${statusTone(job.last_status)}`}>
-                      {job.last_status ?? 'unknown'}
-                    </span>
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">Schedule: {job.schedule ?? 'Not scheduled'}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Last run: {formatDateTime(job.last_run_at)}</p>
-                {job.last_error && <p className="mt-1 text-xs text-rose-700">Error: {job.last_error}</p>}
+    <Card aria-labelledby="system-health-heading">
+      <section>
+        <CardHeader className="pb-3">
+          <CardTitle
+            id="system-health-heading"
+            className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            <ActivityIcon className="h-4 w-4 text-primary/80" />
+            System Health
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          {healthLoading ? (
+            <div className="space-y-3" aria-live="polite" aria-busy="true">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+              <div className="space-y-2 rounded-lg border border-border p-2.5">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
               </div>
-            ))}
-          </div>
-
-          {healthError && (
-            <div
-              className="mt-3 rounded-lg border border-red-200 bg-red-50/80 px-3 py-2 text-sm text-red-700"
-              role="alert"
-              aria-live="polite"
-            >
-              {healthError}
             </div>
+          ) : (
+            <>
+              <dl className="space-y-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-muted-foreground">Last account sync</dt>
+                  <dd className="text-foreground">
+                    {formatShortDateTime(lastAccountSyncAt)}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-muted-foreground">Last analysis run</dt>
+                  <dd className="text-foreground">
+                    {formatShortDateTime(lastAnalysisAt)}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-muted-foreground">
+                    Last weekly insights run
+                  </dt>
+                  <dd className="text-foreground">
+                    {formatShortDateTime(lastWeeklyInsightsAt)}
+                  </dd>
+                </div>
+              </dl>
+
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Latest Error
+                </p>
+                <p className="mt-1 text-sm text-foreground">
+                  {systemHealth?.latest_error ?? "None"}
+                </p>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <ActivityIcon className="h-3.5 w-3.5 text-primary/75" />
+                    Job Status
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {systemHealth?.jobs?.length ?? 0} jobs
+                  </p>
+                </div>
+
+                {systemHealth?.jobs?.length ? (
+                  <div className="space-y-2">
+                    {systemHealth.jobs.map((job) => (
+                      <div
+                        key={job.job_name}
+                        className="space-y-1.5 rounded-md border border-border bg-card px-2.5 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {job.job_name}
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              aria-hidden="true"
+                              className={`h-2 w-2 rounded-full ${statusDot(job.last_status)}`}
+                            />
+                            <Badge
+                              variant="outline"
+                              className={statusBadgeClass(job.last_status)}
+                            >
+                              {formatStatusLabel(job.last_status)}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                          <p>Schedule: {job.schedule ?? "Not scheduled"}</p>
+                          <p className={statusTone(job.last_status)}>
+                            Last run: {formatShortDateTime(job.last_run_at)}
+                          </p>
+                        </div>
+                        {job.last_error && (
+                          <p className="text-xs text-rose-700">
+                            Error: {job.last_error}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    className="min-h-[120px] bg-card/60"
+                    icon={<ActivityIcon className="h-4 w-4" />}
+                    title="No jobs found"
+                    description="Job statuses will appear after scheduled jobs are detected."
+                  />
+                )}
+              </div>
+
+              {healthError && (
+                <div
+                  className="rounded-lg border border-red-200 bg-red-50/80 px-3 py-2 text-sm text-red-700"
+                  role="alert"
+                  aria-live="polite"
+                >
+                  {healthError}
+                </div>
+              )}
+            </>
           )}
-        </>
-      )}
-    </section>
-  )
+        </CardContent>
+      </section>
+    </Card>
+  );
 }

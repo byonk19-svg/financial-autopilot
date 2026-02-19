@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { getAccessToken } from '@/lib/auth'
 import { captureException } from '@/lib/errorReporting'
-import { functionUrl } from '@/lib/functions'
+import { fetchFunctionWithAuth } from '@/lib/fetchWithAuth'
 import { supabase } from '@/lib/supabase'
 import type { SubscriptionCadence, SubscriptionClassification } from '@/lib/types'
 
@@ -329,14 +328,10 @@ export function useRules(userId: string | undefined) {
     setError('')
     setMessage('')
     try {
-      const token = await getAccessToken()
-      if (!token) throw new Error('Session expired. Please log in again.')
-
-      const response = await fetch(functionUrl('analysis-daily'), {
+      const response = await fetchFunctionWithAuth('analysis-daily', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({}),
       })

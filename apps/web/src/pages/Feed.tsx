@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getLoginRedirectPath } from '../lib/loginRedirect'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 
@@ -29,15 +30,17 @@ export default function Feed() {
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState('')
 
-  const loadFeed = async () => {
-    if (!session?.user) return
+  const userId = session?.user?.id
+
+  const loadFeed = useCallback(async () => {
+    if (!userId) return
     setFetching(true)
     setError('')
 
     const { data, error: fetchError } = await supabase
       .from('autopilot_feed_items')
       .select('id, item_type, title, summary, is_read, created_at, action_label, action_url')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(100)
 
@@ -49,25 +52,25 @@ export default function Feed() {
 
     setItems((data ?? []) as FeedItem[])
     setFetching(false)
-  }
+  }, [userId])
 
   useEffect(() => {
     if (loading) return
     if (!session?.user) {
-      navigate('/login', { replace: true })
+      navigate(getLoginRedirectPath(), { replace: true })
       return
     }
 
     void loadFeed()
-  }, [loading, navigate, session])
+  }, [loading, loadFeed, navigate, session?.user])
 
   const markAllRead = async () => {
-    if (!session?.user) return
+    if (!userId) return
 
     const { error: updateError } = await supabase
       .from('autopilot_feed_items')
       .update({ is_read: true })
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .eq('is_read', false)
 
     if (updateError) {

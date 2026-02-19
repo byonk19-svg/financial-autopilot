@@ -1,233 +1,147 @@
-# CLAUDE.md — Financial Autopilot
+# CLAUDE.md - Financial Autopilot
 
-## Project Overview
+## Project Snapshot
 
-Financial Autopilot is a full-stack personal finance automation platform. It connects to bank accounts via SimpleFIN, detects recurring charges and subscriptions, generates weekly financial insights, and provides a rules engine for transaction categorization. The frontend is a React SPA and the backend runs on Supabase (PostgreSQL + Deno edge functions).
+Financial Autopilot is a full-stack personal finance app:
+- Frontend: React + TypeScript (Vite)
+- Backend: Supabase Postgres + Edge Functions (Deno)
+- Bank sync: SimpleFIN
 
-## Repository Structure
+The app is live with real data and currently focused on clean, accurate household finance workflows.
 
-```
+## Repository Layout
+
+```txt
 financial-autopilot/
-├── apps/web/                  # React + TypeScript SPA (Vite)
-│   ├── src/
-│   │   ├── pages/             # Route-level page components
-│   │   ├── components/        # Shared components + shadcn/ui
-│   │   │   └── ui/            # shadcn/ui primitives (button, card, badge, etc.)
-│   │   ├── lib/               # Supabase client, hooks, utilities
-│   │   └── assets/            # Static assets
-│   ├── public/                # Served statically
-│   ├── vite.config.ts         # Vite config with @/ path alias
-│   ├── tailwind.config.js     # Tailwind with dark mode + CSS variables
-│   ├── tsconfig.app.json      # Strict TypeScript config
-│   └── eslint.config.js       # ESLint flat config
-├── supabase/
-│   ├── config.toml            # Supabase project config
-│   ├── migrations/            # 18 sequential SQL migrations
-│   └── functions/             # Deno edge functions
-│       ├── _shared/           # Shared utilities (SimpleFIN client, recurring detection, crypto)
-│       ├── simplefin-connect/ # Bank account connection (JWT verified)
-│       ├── simplefin-sync/    # Account & transaction sync (cron)
-│       ├── analysis-daily/    # Recurring pattern detection (cron)
-│       ├── recurring/         # Subscription CRUD API
-│       ├── generate-weekly-insights/ # Weekly insight generation (cron)
-│       ├── redact-descriptions/     # Transaction description cleanup (cron)
-│       ├── purge-old-data/    # Data retention enforcement (cron)
-│       └── system-health/     # Health check endpoint
-├── docs/                      # Additional documentation
-└── package.json               # Monorepo root (npm workspaces)
+|- apps/web/                  # React SPA
+|  |- src/pages/              # route-level pages
+|  |- src/components/         # shared UI + shadcn primitives
+|  |- src/hooks/              # page/feature hooks
+|  |- src/lib/                # utilities, clients, formatters
+|- supabase/
+|  |- migrations/             # SQL migrations
+|  |- functions/              # Edge Functions
+|     |- _shared/             # shared Deno utilities
+|     |- simplefin-sync/
+|     |- simplefin-connect/
+|     |- analysis-daily/
+|     |- generate-weekly-insights/
+|     |- recurring/
+|     |- system-health/
 ```
 
-## Tech Stack
+## Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 18 + TypeScript, Vite 7, React Router 6 |
-| Styling | Tailwind CSS 3, shadcn/ui (new-york style), Radix UI, Lucide icons |
-| Charts | Recharts |
-| Validation | Zod |
-| Dates | date-fns |
-| Auth | Supabase Auth (magic link + password) |
-| Database | PostgreSQL 17 with RLS, pg_cron |
-| Backend | Supabase Edge Functions (Deno 2) |
-| API | PostgREST (auto-generated) + custom edge functions |
+- React 18 + TypeScript + Vite
+- Tailwind + shadcn/ui + Radix
+- Supabase JS client (auth + PostgREST + RPC)
+- Supabase Postgres with RLS
+- Supabase Edge Functions (Deno)
 
-## Development Commands
+## Core Commands
 
-### Web App (`apps/web/`)
+From repo root:
 
 ```bash
-npm run dev          # Start Vite dev server
-npm run build        # TypeScript check + Vite production build
-npm run lint         # ESLint
-npm run preview      # Preview production build
+npm install
+npm --workspace apps/web run dev -- --host 127.0.0.1 --port 5174
+npm --workspace apps/web run build
+npm --workspace apps/web run lint
 ```
 
-### Supabase
+Supabase:
 
 ```bash
-supabase start                           # Start local Supabase stack
-supabase db push                         # Apply all migrations
-supabase functions deploy <function>     # Deploy a single edge function
-supabase secrets set KEY=VALUE           # Set edge function secrets
+supabase db push
+supabase functions deploy <function-name>
+supabase secrets set KEY=VALUE
 ```
 
-### From Monorepo Root
+## Environment
 
-```bash
-npm install          # Install all workspace dependencies
-```
+Frontend (`apps/web/.env`):
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_FUNCTIONS_URL`
+- `VITE_ENABLE_RERUN_DETECTION=true` (required for rerun detection button)
+- `VITE_SENTRY_DSN` (optional, if Sentry is enabled)
 
-## Environment Variables
+Edge function secrets:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SIMPLEFIN_ENC_KEY`
+- `CRON_SECRET`
+- `ALLOWED_ORIGINS` (for CORS allowlist)
 
-### Frontend (`apps/web/.env`)
+## Product Reality (Important)
 
-| Variable | Purpose |
-|---|---|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous/public key |
-| `VITE_FUNCTIONS_URL` | Base URL for edge function invocations |
+This is a credit-card-first household.
 
-### Edge Function Secrets
+- Spending should be based on credit card purchase activity.
+- Cash flow should be based on checking account inflows/outflows.
+- Do not combine both naively in one ledger or spend will be double-counted.
 
-| Variable | Purpose |
-|---|---|
-| `SUPABASE_URL` | Provided automatically by Supabase |
-| `SUPABASE_ANON_KEY` | Provided automatically by Supabase |
-| `SUPABASE_SERVICE_ROLE_KEY` | Provided automatically by Supabase |
-| `SIMPLEFIN_ENC_KEY` | Encryption key for SimpleFIN access URLs |
-| `CRON_SECRET` | Shared secret for cron-triggered functions |
+## Data Model Notes
 
-## Architecture & Key Patterns
+`accounts`:
+- `type` (from provider)
+- `owner` (`brianna | elaine | household`) - user-managed
+- `is_credit` - DB-derived
 
-### Monorepo Layout
+`transactions`:
+- `owner` (inherited from account by trigger, with guard)
+- `is_credit` (derived/denormalized from account)
+- `type` (`income | expense | transfer | savings`)
 
-npm workspaces with `apps/*`. The root `package.json` pins React 18.2.0 via `overrides`. The web app is at `apps/web/`.
+## Rule Engines (Both Exist)
 
-### Frontend Routing
+1. `transaction_rules` (older/manual UI flow)
+2. `transaction_category_rules_v1` (sync-time auto-categorization)
 
-`App.tsx` defines all routes. The root path (`/`) renders the Dashboard. `/dashboard` redirects to `/`. Catch-all (`*`) also redirects to `/`. Auth-gated pages check session via the `useSession()` hook from `lib/session.ts`.
+For ingestion-time automation, prefer `transaction_category_rules_v1`.
 
-### Pages
+## Migrations to Keep Mentally Aligned
 
-| Route | Component | Purpose |
-|---|---|---|
-| `/` | Dashboard | Stats, upcoming subscriptions, system health, insights feed |
-| `/subscriptions` | Subscriptions | Recurring charge management with classification |
-| `/transactions` | Transactions | Browse/filter/categorize transactions |
-| `/alerts` | Alerts | Financial anomaly notifications |
-| `/classification-rules` | ClassificationRules | Rules for auto-classifying recurring charges |
-| `/rules` | Rules | Transaction categorization rules + merchant aliases |
-| `/connect` | Connect | SimpleFIN bank connection setup |
-| `/login` | Login | Auth (magic link + password) |
-| `/overview` | Overview | Account balances and sync |
-| `/home` | Home | Landing page |
+- `0043`: account owner + transaction owner inheritance trigger
+- `0044`: owner/type-aware `dashboard_kpis` + `shift_week_summary`
+- `0045`: savings buckets + contributions + `savings_bucket_summary`
+- `0047`: `is_credit` derivation and credit-aware KPI logic
+- `0048`: inferred opening balance RPC for cash flow
+- `0049`: optional account-owner inference by institution pattern
+- `0050`: account owner assignment RPC + UI flow
 
-### Supabase Client
+## Non-Negotiable Behavior
 
-Initialized in `lib/supabase.ts` using `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Edge function URLs are constructed via `lib/functions.ts` using `VITE_FUNCTIONS_URL`.
+- `accounts.owner` is user-managed and must not be overwritten by sync.
+- Sync should avoid writing user-managed/DB-derived fields when possible.
+- Keep trigger-owned logic in DB (owner inheritance, is_credit derivation).
 
-### Authentication Flow
+## Frontend Conventions
 
-- `lib/session.ts` exports `useSession()` — a React hook that tracks auth state via `onAuthStateChange`
-- Login supports password and magic link modes
-- Edge functions use either JWT verification (e.g., `simplefin-connect`) or `CRON_SECRET` header validation (cron-triggered functions)
+- Thin page components, logic in hooks/components
+- Reuse shared helpers from `src/lib` (formatters/auth/error reporting)
+- Use shadcn/ui primitives in `src/components/ui`
+- Capture errors with `captureException(...)` (do not silently fail)
 
-### Database
+## Backend Conventions
 
-- 18 sequential migrations in `supabase/migrations/` (numbered `0001` through `0018`)
-- All tables enforce Row-Level Security (RLS) scoped to `user_id`
-- Core tables: `profiles`, `bank_connections`, `accounts`, `transactions`, `subscriptions`, `rules`, `alerts`, `insights`, `categories`, `merchant_aliases`, `recurring_classification_rules`, `autopilot_feed_items`
-- Scheduled jobs via `pg_cron`: daily sync, daily description redaction, daily analysis, weekly insights, periodic data purge
+- New schema change = new migration file, never rewrite old migrations
+- RLS on all user-scoped tables
+- Indexes for primary `WHERE` and `JOIN` paths
+- Prefer SQL RPC for heavy aggregates/bulk updates
+- Cron functions must validate `CRON_SECRET`
 
-### Edge Functions
+## Current Priorities
 
-Functions in `supabase/functions/` each have an `index.ts` entry point. Shared code lives in `_shared/`. Key patterns:
-- **JWT-verified functions** (user-initiated): `simplefin-connect`
-- **Cron-triggered functions** (validate `CRON_SECRET`): `simplefin-sync`, `analysis-daily`, `redact-descriptions`, `purge-old-data`, `generate-weekly-insights`
-- **API functions** (direct invocation): `recurring`, `system-health`
+1. Keep sync behavior safe (no overwriting user-managed account ownership)
+2. Maintain accurate cash flow vs spending separation
+3. Improve owner assignment UX reliability
+4. Keep recurring/review workflow simple and explainable
 
-### Recurring Pattern Detection
+## User Setup Assumptions
 
-The `_shared/recurring.ts` module implements statistical cadence detection (weekly, monthly, quarterly, yearly) with confidence scoring based on mean, median, and standard deviation of intervals between charges.
-
-### UI Component Library
-
-Uses shadcn/ui (new-york style) with components in `src/components/ui/`. Configured via `components.json`. Components use `class-variance-authority` for variants and `tailwind-merge` + `clsx` for class composition (via `lib/utils.ts`).
-
-## Code Conventions
-
-### TypeScript
-
-- **Strict mode** enabled with `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`
-- Target: ES2022, module resolution: bundler
-- Path alias: `@/` maps to `src/`
-- Use `import type` for type-only imports (enforced by `verbatimModuleSyntax`)
-
-### Linting
-
-- ESLint 9 flat config with `@eslint/js` recommended + `typescript-eslint` recommended
-- React Hooks plugin (recommended) + React Refresh plugin
-- Run with `npm run lint` from `apps/web/`
-
-### Styling
-
-- Tailwind CSS 3 with class-based dark mode
-- Theme colors defined as HSL CSS variables in `index.css`
-- Use `cn()` utility (from `lib/utils.ts`) for conditional class composition
-- Follow shadcn/ui patterns for new UI components
-
-### File Organization
-
-- One page component per file in `src/pages/`
-- Shared components in `src/components/`
-- shadcn/ui primitives in `src/components/ui/`
-- Utility modules, hooks, and service clients in `src/lib/`
-- Edge function entry points at `supabase/functions/<name>/index.ts`
-- Shared edge function utilities at `supabase/functions/_shared/`
-
-### Database Migrations
-
-- Sequential numbering: `NNNN_descriptive_name.sql`
-- Use `if not exists` / `create or replace` for idempotency
-- Always include RLS policies for new tables
-- Apply with `supabase db push`
-
-### Edge Functions
-
-- Deno 2 runtime with TypeScript
-- Import Supabase client from `@supabase/supabase-js`
-- Shared imports from `../_shared/`
-- Cron-triggered functions must validate `CRON_SECRET` from the `Authorization` header
-- Return JSON responses with appropriate HTTP status codes
-
-## Testing
-
-No test framework is currently configured. The root `package.json` test script is a placeholder. When adding tests, Vitest is the recommended choice given the Vite build setup.
-
-## Common Tasks
-
-### Adding a new page
-
-1. Create component in `apps/web/src/pages/NewPage.tsx`
-2. Add route in `App.tsx` inside `<Routes>`
-3. Add navigation link to the `links` array in `App.tsx`
-
-### Adding a shadcn/ui component
-
-Follow the shadcn/ui docs. Components go in `src/components/ui/`. The project uses the `new-york` style with `neutral` base color.
-
-### Adding a new edge function
-
-1. Create `supabase/functions/<name>/index.ts`
-2. Add JWT config in `supabase/config.toml` under `[functions.<name>]`
-3. Deploy with `supabase functions deploy <name>`
-
-### Adding a database migration
-
-1. Create `supabase/migrations/NNNN_description.sql` (next sequential number)
-2. Include RLS policies for any new tables
-3. Apply with `supabase db push`
-
-### Calling edge functions from the frontend
-
-Use `functionUrl(name)` from `lib/functions.ts` to build the URL. Pass the user's access token in the `Authorization` header for JWT-verified functions.
+- Two-person household model: Brianna + Elaine (+ Household shared context)
+- Most spending is on credit cards
+- Paychecks land in checking accounts
+- Goal is a clean, obvious, and accurate workflow with minimal manual maintenance

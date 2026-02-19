@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
 import Alerts from './pages/Alerts'
+import CashFlow from './pages/CashFlow'
 import ClassificationRules from './pages/ClassificationRules'
 import Connect from './pages/Connect'
 import Dashboard from './pages/Dashboard'
@@ -10,6 +11,7 @@ import Login from './pages/Login'
 import Overview from './pages/Overview'
 import Rules from './pages/Rules'
 import Settings from './pages/Settings'
+import ShiftLog from './pages/ShiftLog'
 import Subscriptions from './pages/Subscriptions'
 import Transactions from './pages/Transactions'
 import { captureException } from './lib/errorReporting'
@@ -26,6 +28,8 @@ const navGroups: NavGroup[] = [
       { to: '/', label: 'Dashboard' },
       { to: '/overview', label: 'Overview' },
       { to: '/transactions', label: 'Transactions' },
+      { to: '/cash-flow', label: 'Cash Flow' },
+      { to: '/shift-log', label: 'Shift Log' },
     ],
   },
   {
@@ -198,6 +202,8 @@ export default function App() {
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/overview" element={<Overview />} />
             <Route path="/transactions" element={<Transactions />} />
+            <Route path="/cash-flow" element={<CashFlow />} />
+            <Route path="/shift-log" element={<ShiftLog />} />
             <Route path="/rules" element={<Rules />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />

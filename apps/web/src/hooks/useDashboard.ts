@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase'
 
 type DashboardKpisRpc = {
   income_mtd: number | string | null
+  income_brianna: number | string | null
+  income_elaine: number | string | null
   spend_mtd: number | string | null
   cash_flow_mtd: number | string | null
   spend_last_month: number | string | null
@@ -65,6 +67,8 @@ export type SystemHealthPayload = {
 
 export type DashboardKpis = {
   incomeMtd: number
+  incomeBrianna: number
+  incomeElaine: number
   spendMtd: number
   cashFlowMtd: number
   spendLastMonth: number
@@ -115,6 +119,8 @@ function normalizeKpis(data: DashboardKpisRpc | null): DashboardKpis {
 
   return {
     incomeMtd: toNumber(data?.income_mtd ?? 0),
+    incomeBrianna: toNumber(data?.income_brianna ?? 0),
+    incomeElaine: toNumber(data?.income_elaine ?? 0),
     spendMtd: toNumber(data?.spend_mtd ?? 0),
     cashFlowMtd: toNumber(data?.cash_flow_mtd ?? 0),
     spendLastMonth: toNumber(data?.spend_last_month ?? 0),
@@ -142,6 +148,7 @@ export function useDashboard(userId: string | undefined) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [syncNeedsReconnect, setSyncNeedsReconnect] = useState(false)
 
   const loadDashboardData = useCallback(async () => {
     if (!userId) return
@@ -339,6 +346,7 @@ export function useDashboard(userId: string | undefined) {
     setMessage('')
     setError('')
     setSessionExpired(false)
+    setSyncNeedsReconnect(false)
 
     try {
       const response = await fetchFunctionWithAuth('simplefin-sync', {
@@ -365,6 +373,7 @@ export function useDashboard(userId: string | undefined) {
       if (hasConnectionWarning) {
         setMessage('')
         setError('Sync could not read your bank connection. Please reconnect SimpleFIN from the Connect page.')
+        setSyncNeedsReconnect(true)
         setNeedsConnection(true)
         return
       }
@@ -374,6 +383,7 @@ export function useDashboard(userId: string | undefined) {
           payload.transactionsSynced ?? 0
         }.${warningText}`,
       )
+      setSyncNeedsReconnect(false)
       await refreshAll()
     } catch (syncError) {
       if (syncError instanceof AuthExpiredError) {
@@ -385,6 +395,9 @@ export function useDashboard(userId: string | undefined) {
       })
       const detail = syncError instanceof Error ? syncError.message : 'Sync failed.'
       setError(detail)
+      if (/decrypt|token|unauthorized|reconnect/i.test(detail)) {
+        setSyncNeedsReconnect(true)
+      }
     } finally {
       setSyncing(false)
     }
@@ -412,6 +425,7 @@ export function useDashboard(userId: string | undefined) {
     message,
     error,
     sessionExpired,
+    syncNeedsReconnect,
     onSyncNow,
   }
 }

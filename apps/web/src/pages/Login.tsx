@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { hasActiveSimplefinConnection } from '../lib/bankConnections'
 import { captureException } from '../lib/errorReporting'
 import { supabase } from '../lib/supabase'
@@ -28,6 +28,7 @@ function DollarLogo() {
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { session, loading } = useSession()
   const [mode, setMode] = useState<'magic' | 'password'>('password')
   const [email, setEmail] = useState('')
@@ -37,6 +38,12 @@ export default function Login() {
   const [redirecting, setRedirecting] = useState(false)
 
   const emailRedirectTo = useMemo(() => `${window.location.origin}/login`, [])
+  const nextPath = useMemo(() => {
+    const candidate = new URLSearchParams(location.search).get('next')
+    if (!candidate) return null
+    if (!candidate.startsWith('/') || candidate.startsWith('//')) return null
+    return candidate
+  }, [location.search])
 
   useEffect(() => {
     const redirectAfterLogin = async () => {
@@ -44,6 +51,10 @@ export default function Login() {
       setRedirecting(true)
 
       try {
+        if (nextPath) {
+          navigate(nextPath, { replace: true })
+          return
+        }
         const isConnected = await hasActiveSimplefinConnection(session.user.id)
         navigate(isConnected ? '/dashboard' : '/connect', { replace: true })
       } catch (redirectError) {
@@ -58,7 +69,7 @@ export default function Login() {
     }
 
     void redirectAfterLogin()
-  }, [loading, navigate, session])
+  }, [loading, navigate, nextPath, session])
 
   const submitMagicLink = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -102,7 +113,7 @@ export default function Login() {
 
   if (loading || redirecting) {
     return (
-      <section className="mx-auto max-w-md rounded-xl border border bg-card p-6 shadow-sm">
+      <section className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
         <DollarLogo />
         <h1 className="mt-5 text-center text-2xl font-semibold text-foreground">Login</h1>
         <p className="mt-2 text-center text-sm text-muted-foreground">Checking your session...</p>
@@ -111,12 +122,12 @@ export default function Login() {
   }
 
   return (
-    <section className="mx-auto max-w-md rounded-xl border border bg-card p-6 shadow-sm">
+    <section className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
       <DollarLogo />
       <h1 className="mt-5 text-center text-2xl font-semibold text-foreground">Login</h1>
       <p className="mt-2 text-center text-sm text-muted-foreground">Choose a login method.</p>
 
-      <div className="mt-4 inline-flex w-full rounded-lg border border p-1">
+      <div className="mt-4 inline-flex w-full rounded-lg border border-border p-1">
         <button
           type="button"
           onClick={() => {
@@ -162,7 +173,7 @@ export default function Login() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
-            className="w-full rounded-lg border border px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+            className="w-full rounded-lg border border-border px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
           />
         </div>
 
@@ -178,7 +189,7 @@ export default function Login() {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+              className="w-full rounded-lg border border-border px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
             />
           </div>
         )}

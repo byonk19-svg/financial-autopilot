@@ -35,7 +35,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     }
 
     return (
-      <section className="rounded-xl border border bg-card p-6 text-center shadow-sm">
+      <section className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
         <h2 className="text-xl font-semibold text-foreground">Something went wrong. Please refresh.</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           If this keeps happening, try signing out and back in.

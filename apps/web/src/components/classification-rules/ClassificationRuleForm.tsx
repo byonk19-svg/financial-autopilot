@@ -16,7 +16,7 @@ export function ClassificationRuleForm({
   onSubmit,
 }: ClassificationRuleFormProps) {
   return (
-    <form onSubmit={onSubmit} className="rounded-xl border border bg-card p-5 shadow-sm">
+    <form onSubmit={onSubmit} className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-foreground">New Rule</h2>
       <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">

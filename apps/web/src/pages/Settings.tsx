@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { captureException } from '../lib/errorReporting'
+import { getLoginRedirectPath } from '../lib/loginRedirect'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 
@@ -21,7 +22,7 @@ export default function Settings() {
 
   useEffect(() => {
     if (!loading && !session?.user) {
-      navigate('/login', { replace: true })
+      navigate(getLoginRedirectPath(), { replace: true })
     }
   }, [loading, navigate, session?.user])
 
@@ -78,7 +79,7 @@ export default function Settings() {
 
   return (
     <section className="mx-auto max-w-3xl space-y-6">
-      <div className="rounded-xl border border bg-card p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Manage account-level preferences and destructive actions.
@@ -121,7 +122,7 @@ export default function Settings() {
           aria-modal="true"
           aria-labelledby="delete-data-title"
         >
-          <div className="w-full max-w-md rounded-xl border border bg-card p-6 shadow-lg">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
             <h3 id="delete-data-title" className="text-lg font-semibold text-foreground">
               Confirm data deletion
             </h3>
@@ -154,7 +155,7 @@ export default function Settings() {
                 type="button"
                 onClick={closeConfirmModal}
                 disabled={isSubmitting}
-                className="rounded-lg border border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </button>

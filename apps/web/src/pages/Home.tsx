@@ -15,7 +15,7 @@ export default function Home() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-xl border border bg-card p-5 shadow-sm">
+        <article className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-primary" aria-hidden="true">
             <path d="M3 10h18M7 15h3M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
@@ -23,7 +23,7 @@ export default function Home() {
           <p className="mt-1 text-sm text-muted-foreground">Automatic transaction syncing.</p>
         </article>
 
-        <article className="rounded-xl border border bg-card p-5 shadow-sm">
+        <article className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-primary" aria-hidden="true">
             <path d="M4 16 10 10l4 4 6-7M20 7h-4v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -31,7 +31,7 @@ export default function Home() {
           <p className="mt-1 text-sm text-muted-foreground">AI-powered recurring charge detection.</p>
         </article>
 
-        <article className="rounded-xl border border bg-card p-5 shadow-sm">
+        <article className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-primary" aria-hidden="true">
             <path d="M12 4 3.5 19h17L12 4Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M12 9v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -41,7 +41,7 @@ export default function Home() {
           <p className="mt-1 text-sm text-muted-foreground">Unusual charge notifications.</p>
         </article>
 
-        <article className="rounded-xl border border bg-card p-5 shadow-sm">
+        <article className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 text-primary" aria-hidden="true">
             <path d="M9 18h6M10 21h4M8.8 14.5c-1.5-1-2.3-2.7-2.3-4.6A5.5 5.5 0 0 1 12 4.5a5.5 5.5 0 0 1 5.5 5.4c0 1.9-.8 3.6-2.3 4.6-.8.6-1.2 1.2-1.3 2H10c-.1-.8-.5-1.4-1.2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>

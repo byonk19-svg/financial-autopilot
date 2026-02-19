@@ -15,6 +15,7 @@ import { useTransactionFilterChips } from '@/hooks/useTransactionFilterChips'
 import { useTransactionSelection } from '@/hooks/useTransactionSelection'
 import type { AccountOption, CategoryOption, TransactionRow } from '@/lib/types'
 import { captureException } from '../lib/errorReporting'
+import { getLoginRedirectPath } from '../lib/loginRedirect'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 
@@ -22,6 +23,7 @@ const PAGE_SIZE = 50
 const UNCATEGORIZED_VALUE = '__uncategorized__'
 type SortColumn = 'posted_at' | 'amount' | 'merchant_normalized'
 type SortDirection = 'asc' | 'desc'
+type TransactionViewPreset = 'all' | 'elaine_income' | 'household_bills' | 'brianna_savings'
 type RuleMatchType = 'equals' | 'contains'
 type RuleApplyScope = 'future_only' | 'past_90_days' | 'all_history'
 type TransactionSplitRow = {
@@ -54,6 +56,19 @@ type CategoryFollowUpPromptState = {
   categoryName: string
   includeAccountScope: boolean
   pendingAction: CategoryFollowUpAction
+}
+
+const TRANSACTION_VIEW_PRESETS: Array<{ value: TransactionViewPreset; label: string }> = [
+  { value: 'all', label: 'All Transactions' },
+  { value: 'elaine_income', label: "Elaine's Income" },
+  { value: 'household_bills', label: 'Household Bills' },
+  { value: 'brianna_savings', label: "Brianna's Savings" },
+]
+
+const TRANSACTION_VIEW_PRESET_LABELS: Record<Exclude<TransactionViewPreset, 'all'>, string> = {
+  elaine_income: "View: Elaine's Income",
+  household_bills: 'View: Household Bills',
+  brianna_savings: "View: Brianna's Savings",
 }
 
 function parseAmount(value: number | string): number {
@@ -172,6 +187,7 @@ export default function Transactions() {
   const [totalCount, setTotalCount] = useState(0)
   const [sortColumn, setSortColumn] = useState<SortColumn>('posted_at')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [viewPreset, setViewPreset] = useState<TransactionViewPreset>('all')
 
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -205,6 +221,11 @@ export default function Transactions() {
     setPage(1)
   }, [])
 
+  const handleViewPresetChange = useCallback((preset: TransactionViewPreset) => {
+    setViewPreset(preset)
+    setPage(1)
+  }, [])
+
   const handlePreviousPage = useCallback(() => {
     setPage((current) => Math.max(1, current - 1))
   }, [])
@@ -231,6 +252,7 @@ export default function Transactions() {
   }, [])
 
   const clearAllFilters = useCallback(() => {
+    setViewPreset('all')
     setStartDate('')
     setEndDate('')
     setAccountFilter('')
@@ -239,8 +261,10 @@ export default function Transactions() {
     setPage(1)
   }, [])
 
-  const removeFilterChip = useCallback((key: 'date_range' | 'account' | 'category' | 'search') => {
-    if (key === 'date_range') {
+  const removeFilterChip = useCallback((key: 'view' | 'date_range' | 'account' | 'category' | 'search') => {
+    if (key === 'view') {
+      setViewPreset('all')
+    } else if (key === 'date_range') {
       setStartDate('')
       setEndDate('')
     } else if (key === 'account') {
@@ -266,6 +290,7 @@ export default function Transactions() {
   }, [categories])
 
   const { chips: activeFilterChips, hasActiveFilters } = useTransactionFilterChips({
+    viewPresetLabel: viewPreset === 'all' ? null : TRANSACTION_VIEW_PRESET_LABELS[viewPreset],
     startDate,
     endDate,
     accountFilter,
@@ -770,7 +795,7 @@ export default function Transactions() {
     const loadFilterOptions = async () => {
       if (loading) return
       if (!session?.user) {
-        navigate('/login', { replace: true })
+        navigate(getLoginRedirectPath(), { replace: true })
         return
       }
 
@@ -831,11 +856,19 @@ export default function Transactions() {
         let query = supabase
           .from('transactions')
           .select(
-            'id, account_id, category_id, user_category_id, category_source, rule_id, classification_rule_ref, posted_at, merchant_canonical, merchant_normalized, description_short, description_full, amount, currency',
+            'id, account_id, category_id, user_category_id, type, category, owner, category_source, rule_id, classification_rule_ref, posted_at, merchant_canonical, merchant_normalized, description_short, description_full, amount, currency',
             { count: 'exact' },
           )
           .eq('user_id', session.user.id)
           .eq('is_deleted', false)
+
+        if (viewPreset === 'elaine_income') {
+          query = query.eq('owner', 'elaine').eq('type', 'income')
+        } else if (viewPreset === 'household_bills') {
+          query = query.eq('owner', 'household').eq('type', 'expense').eq('category', 'bill')
+        } else if (viewPreset === 'brianna_savings') {
+          query = query.eq('owner', 'brianna').in('type', ['transfer', 'savings'])
+        }
 
         if (accountFilter) {
           query = query.eq('account_id', accountFilter)
@@ -951,7 +984,7 @@ export default function Transactions() {
     return () => {
       active = false
     }
-  }, [accountFilter, categoryFilter, createSplitDraftFromRows, endDate, loading, page, refreshNonce, search, session, sortColumn, sortDirection, startDate])
+  }, [accountFilter, categoryFilter, createSplitDraftFromRows, endDate, loading, page, refreshNonce, search, session, sortColumn, sortDirection, startDate, viewPreset])
 
   const updateTransactionCategory = useCallback(
     async (txnId: string, nextValue: string) => {
@@ -1103,11 +1136,32 @@ export default function Transactions() {
 
   return (
     <main className="space-y-4" aria-busy={fetching}>
-      <section aria-labelledby="transactions-heading" className="rounded-xl border border bg-card p-6 shadow-sm">
+      <section aria-labelledby="transactions-heading" className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 id="transactions-heading" className="text-2xl font-semibold text-foreground">
           Transactions
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">Filter and review synced transactions.</p>
+
+        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Transaction views">
+          {TRANSACTION_VIEW_PRESETS.map((preset) => {
+            const isActive = viewPreset === preset.value
+            return (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => handleViewPresetChange(preset.value)}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  isActive
+                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    : 'bg-muted/50 text-muted-foreground border border-border hover:bg-muted'
+                }`}
+                aria-pressed={isActive}
+              >
+                {preset.label}
+              </button>
+            )
+          })}
+        </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1">
@@ -1122,7 +1176,7 @@ export default function Transactions() {
               type="date"
               value={startDate}
               onChange={handleStartDateChange}
-              className="w-full rounded-lg border border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1">
@@ -1137,7 +1191,7 @@ export default function Transactions() {
               type="date"
               value={endDate}
               onChange={handleEndDateChange}
-              className="w-full rounded-lg border border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           <div className="space-y-1">
@@ -1151,7 +1205,7 @@ export default function Transactions() {
               id="transactions-account-filter"
               value={accountFilter}
               onChange={handleAccountFilterChange}
-              className="w-full rounded-lg border border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">All accounts</option>
               {accounts.map((account) => (
@@ -1172,7 +1226,7 @@ export default function Transactions() {
               id="transactions-category-filter"
               value={categoryFilter}
               onChange={handleCategoryFilterChange}
-              className="w-full rounded-lg border border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">All categories</option>
               {categories.map((category) => (
@@ -1195,7 +1249,7 @@ export default function Transactions() {
               value={search}
               onChange={handleSearchChange}
               placeholder="Merchant or description"
-              className="w-full rounded-lg border border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
         </div>
@@ -1211,14 +1265,14 @@ export default function Transactions() {
 
       <section
         aria-labelledby="transactions-results-heading"
-        className="overflow-x-auto rounded-xl border border bg-card shadow-sm"
+        className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm"
       >
         <h2 id="transactions-results-heading" className="sr-only">
           Transaction results
         </h2>
         {fetching ? (
           <div className="p-4" aria-live="polite" aria-busy="true">
-            <div className="overflow-hidden rounded-lg border border">
+            <div className="overflow-hidden rounded-lg border border-border">
               <div className="grid grid-cols-7 gap-4 border-b border bg-muted px-4 py-3">
                 <div className="h-3 w-16 animate-pulse rounded bg-muted-foreground/20" />
                 <div className="h-3 w-20 animate-pulse rounded bg-muted-foreground/20" />
@@ -1253,7 +1307,7 @@ export default function Transactions() {
               Showing {transactions.length} of {totalCount} transactions
             </p>
             {selectedCount > 0 && (
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border bg-muted/40 px-3 py-2">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
                 <p className="text-sm font-medium text-foreground">{selectedCount} selected on this page</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <DropdownMenu>
@@ -1261,7 +1315,7 @@ export default function Transactions() {
                       <button
                         type="button"
                         disabled={bulkUpdating}
-                        className="inline-flex items-center justify-between gap-2 rounded-md border border px-2.5 py-1.5 text-sm text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-sm text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <span>Set category</span>
                         <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1285,7 +1339,7 @@ export default function Transactions() {
                     type="button"
                     onClick={() => void applyBulkCategoryUpdate(UNCATEGORIZED_VALUE)}
                     disabled={bulkUpdating}
-                    className="rounded-md border border px-2.5 py-1.5 text-sm text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-md border border-border px-2.5 py-1.5 text-sm text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Clear category
                   </button>
@@ -1421,7 +1475,7 @@ export default function Transactions() {
                                   <button
                                     type="button"
                                     disabled={isCategoryUpdating || bulkUpdating}
-                                    className="inline-flex min-w-[11rem] items-center justify-between gap-2 rounded-md border border px-2.5 py-1.5 text-left text-sm text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="inline-flex min-w-[11rem] items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-left text-sm text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                                     aria-label={`Edit category for ${transaction.description_short}`}
                                   >
                                     <span className="truncate">{categoryName ?? 'Uncategorized'}</span>
@@ -1463,7 +1517,7 @@ export default function Transactions() {
                             <button
                               type="button"
                               onClick={() => toggleTransactionDetails(transaction)}
-                              className="inline-flex items-center gap-1 rounded-md border border px-2 py-1 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               aria-expanded={isExpanded}
                               aria-controls={`transaction-details-${transaction.id}`}
                             >
@@ -1483,7 +1537,7 @@ export default function Transactions() {
                             className="bg-muted/20"
                           >
                             <td colSpan={7} className="px-4 pb-4 pt-0">
-                              <div className="mt-1 rounded-lg border border bg-muted/30 p-4">
+                              <div className="mt-1 rounded-lg border border-border bg-muted/30 p-4">
                                 <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-3">
                                   <div>
                                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -1571,7 +1625,7 @@ export default function Transactions() {
                                         if (value === localCategoryValue || isCategoryUpdating || bulkUpdating) return
                                         void updateTransactionCategory(transaction.id, value)
                                       }}
-                                      className="min-w-[12rem] rounded-md border border bg-card px-2.5 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="min-w-[12rem] rounded-md border border-border bg-card px-2.5 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       <option value={UNCATEGORIZED_VALUE}>Uncategorized</option>
                                       {categories.map((category) => (
@@ -1585,7 +1639,7 @@ export default function Transactions() {
                                   <button
                                     type="button"
                                     onClick={() => openRuleModal(transaction)}
-                                    className="rounded-md border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                   >
                                     Create rule from this transaction
                                   </button>
@@ -1619,7 +1673,7 @@ export default function Transactions() {
                                     {splitDraft.map((line) => (
                                       <div
                                         key={line.draft_id}
-                                        className="grid gap-2 rounded-md border border bg-card p-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.75fr)_minmax(0,1fr)_auto]"
+                                        className="grid gap-2 rounded-md border border-border bg-card p-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.75fr)_minmax(0,1fr)_auto]"
                                       >
                                         <div>
                                           <label
@@ -1638,7 +1692,7 @@ export default function Transactions() {
                                                 category_id: next === UNCATEGORIZED_VALUE ? null : next,
                                               })
                                             }}
-                                            className="mt-1 w-full rounded-md border border bg-card px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                                            className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                                           >
                                             <option value={UNCATEGORIZED_VALUE}>Uncategorized</option>
                                             {categories.map((category) => (
@@ -1666,7 +1720,7 @@ export default function Transactions() {
                                               updateSplitLine(transaction.id, line.draft_id, {
                                                 amount_input: event.target.value,
                                               })}
-                                            className="mt-1 w-full rounded-md border border bg-card px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                                            className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                                           />
                                         </div>
 
@@ -1686,7 +1740,7 @@ export default function Transactions() {
                                               updateSplitLine(transaction.id, line.draft_id, {
                                                 memo: event.target.value,
                                               })}
-                                            className="mt-1 w-full rounded-md border border bg-card px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                                            className="mt-1 w-full rounded-md border border-border bg-card px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                                           />
                                         </div>
 
@@ -1695,7 +1749,7 @@ export default function Transactions() {
                                             type="button"
                                             disabled={isSplitSaving || splitDraft.length <= 1}
                                             onClick={() => removeSplitLine(transaction.id, line.draft_id)}
-                                            className="rounded-md border border px-2 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                                            className="rounded-md border border-border px-2 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                                           >
                                             Remove
                                           </button>
@@ -1709,7 +1763,7 @@ export default function Transactions() {
                                       type="button"
                                       onClick={() => addSplitLine(transaction)}
                                       disabled={isSplitSaving}
-                                      className="rounded-md border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       Add split line
                                     </button>
@@ -1719,7 +1773,7 @@ export default function Transactions() {
                                           type="button"
                                           onClick={() => void clearSplitDraft(transaction)}
                                           disabled={isSplitSaving}
-                                          className="rounded-md border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                                          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                           Clear splits
                                         </button>
@@ -1753,7 +1807,7 @@ export default function Transactions() {
                       type="button"
                       onClick={handlePreviousPage}
                       disabled={fetching || !hasPreviousPage || bulkUpdating}
-                      className="rounded-lg border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Previous
                     </button>
@@ -1761,7 +1815,7 @@ export default function Transactions() {
                       type="button"
                       onClick={handleNextPage}
                       disabled={fetching || !hasNextPage || bulkUpdating}
-                      className="rounded-lg border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Next
                     </button>
@@ -1780,7 +1834,7 @@ export default function Transactions() {
           aria-modal="true"
           aria-labelledby="create-transaction-rule-title"
         >
-          <div className="my-4 w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border bg-card p-5 shadow-xl sm:my-0">
+          <div className="my-4 w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl sm:my-0">
             <h3 id="create-transaction-rule-title" className="text-lg font-semibold text-foreground">
               Create rule from transaction
             </h3>
@@ -1788,7 +1842,7 @@ export default function Transactions() {
               Save a merchant matching rule and apply it to matching transactions.
             </p>
 
-            <dl className="mt-4 grid gap-2 rounded-lg border border bg-muted/30 p-3 text-sm md:grid-cols-2">
+            <dl className="mt-4 grid gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm md:grid-cols-2">
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Merchant</dt>
                 <dd className="mt-1 text-foreground">
@@ -1834,7 +1888,7 @@ export default function Transactions() {
                   onChange={(event) =>
                     setRuleForm((current) => ({ ...current, canonicalMerchant: event.target.value }))
                   }
-                  className="w-full rounded-md border border bg-card px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
 
@@ -1879,7 +1933,7 @@ export default function Transactions() {
                       applyScope: event.target.value as RuleApplyScope,
                     }))
                   }
-                  className="w-full rounded-md border border bg-card px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="future_only">Future only</option>
                   <option value="past_90_days">Past 90 days</option>
@@ -1901,7 +1955,7 @@ export default function Transactions() {
                   onChange={(event) =>
                     setRuleForm((current) => ({ ...current, categoryId: event.target.value }))
                   }
-                  className="w-full rounded-md border border bg-card px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="">Choose a category</option>
                   {categories.map((category) => (
@@ -1912,7 +1966,7 @@ export default function Transactions() {
                 </select>
               </div>
 
-              <label className="flex items-start gap-2 rounded-md border border bg-muted/30 px-3 py-2 text-sm text-foreground">
+              <label className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
                 <input
                   type="checkbox"
                   checked={ruleForm.constrainToAccount}
@@ -1923,7 +1977,7 @@ export default function Transactions() {
                       constrainToAccount: event.target.checked,
                     }))
                   }
-                  className="mt-0.5 rounded border border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="mt-0.5 rounded border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <span>
                   Restrict to this account
@@ -1945,7 +1999,7 @@ export default function Transactions() {
                 type="button"
                 disabled={ruleModalSubmitting}
                 onClick={closeRuleModal}
-                className="rounded-md border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Cancel
               </button>
@@ -1964,7 +2018,7 @@ export default function Transactions() {
 
       {categoryFollowUpPrompt && (
         <div
-          className="fixed bottom-4 left-4 z-50 w-full max-w-md rounded-lg border border bg-card p-4 shadow-lg"
+          className="fixed bottom-4 left-4 z-50 w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-lg"
           role="status"
           aria-live="polite"
         >
@@ -1975,13 +2029,13 @@ export default function Transactions() {
             transactions in the last 12 months.
           </p>
 
-          <label className="mt-3 flex items-start gap-2 rounded-md border border bg-muted/30 px-3 py-2 text-sm text-foreground">
+          <label className="mt-3 flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
             <input
               type="checkbox"
               checked={categoryFollowUpPrompt.includeAccountScope}
               disabled={categoryFollowUpPrompt.pendingAction !== null}
               onChange={(event) => toggleCategoryFollowUpAccountScope(event.target.checked)}
-              className="mt-0.5 rounded border border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-0.5 rounded border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <span>
               Only this account
@@ -1996,7 +2050,7 @@ export default function Transactions() {
               type="button"
               disabled={categoryFollowUpPrompt.pendingAction !== null}
               onClick={dismissCategoryFollowUpPrompt}
-              className="rounded-md border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             >
               Dismiss
             </button>
@@ -2004,7 +2058,7 @@ export default function Transactions() {
               type="button"
               disabled={categoryFollowUpPrompt.pendingAction !== null}
               onClick={() => void applyCategoryToSimilar()}
-              className="rounded-md border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             >
               {categoryFollowUpPrompt.pendingAction === 'apply_similar'
                 ? 'Applying...'

@@ -25,7 +25,7 @@ export function AliasFormCard({
   onSubmit,
 }: AliasFormCardProps) {
   return (
-    <form onSubmit={onSubmit} className="rounded-xl border border bg-card p-5 shadow-sm">
+    <form onSubmit={onSubmit} className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-foreground">Quick Alias (Rename Merchant)</h2>
       <div className="mt-2 flex flex-wrap gap-2">
         {ALIAS_PRESETS.map((preset) => (
@@ -53,7 +53,7 @@ export function AliasFormCard({
           {showAdvanced ? 'Hide advanced options' : 'Show advanced options'}
         </button>
         {showAdvanced && (
-          <div className="grid gap-3 rounded-lg border border bg-muted/50 p-3 md:grid-cols-2">
+          <div className="grid gap-3 rounded-lg border border-border bg-muted/50 p-3 md:grid-cols-2">
             <select value={form.matchType} onChange={(e) => onSetForm((c) => ({ ...c, matchType: e.target.value as AliasRow['match_type'] }))} className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2">
               <option value="contains">Match type: contains</option>
               <option value="equals">Match type: equals</option>

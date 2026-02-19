@@ -4,6 +4,7 @@ import { ClassificationRuleForm } from '@/components/classification-rules/Classi
 import { ClassificationRulesHeader } from '@/components/classification-rules/ClassificationRulesHeader'
 import { ClassificationRulesList } from '@/components/classification-rules/ClassificationRulesList'
 import { useClassificationRules } from '@/hooks/useClassificationRules'
+import { getLoginRedirectPath } from '@/lib/loginRedirect'
 import { useSession } from '@/lib/session'
 
 export default function ClassificationRules() {
@@ -32,7 +33,7 @@ export default function ClassificationRules() {
   useEffect(() => {
     if (loading) return
     if (!session?.user) {
-      navigate('/login', { replace: true })
+      navigate(getLoginRedirectPath(), { replace: true })
     }
   }, [loading, navigate, session])
 

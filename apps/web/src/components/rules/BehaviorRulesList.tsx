@@ -16,7 +16,7 @@ export function BehaviorRulesList({
   onDeleteRule,
 }: BehaviorRulesListProps) {
   return (
-    <div className="rounded-xl border border bg-card p-5 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-foreground">Saved Behavior Rules</h2>
       {fetching ? (
         <p className="mt-3 text-sm text-muted-foreground">Loading...</p>
@@ -25,7 +25,7 @@ export function BehaviorRulesList({
       ) : (
         <div className="mt-3 space-y-2">
           {rules.map((row) => (
-            <div key={row.id} className="rounded-lg border border bg-card p-3">
+            <div key={row.id} className="rounded-lg border border-border bg-card p-3">
               <p className="text-sm text-foreground">{friendlyRuleSummary(row)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Priority {row.priority} • {row.cadence ?? 'Any cadence'} • Updated {formatTime(row.updated_at)}

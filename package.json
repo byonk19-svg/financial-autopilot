@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:unit",
+    "test:unit": "vitest run supabase/functions/_shared/rules_v1.test.ts supabase/functions/_shared/recurring_v1.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -14,6 +15,9 @@
   "dependencies": {
     "react": "18.2.0",
     "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   },
   "overrides": {
     "react": "18.2.0",

@@ -25,7 +25,7 @@ export function BehaviorRuleFormCard({
   onSubmit,
 }: BehaviorRuleFormCardProps) {
   return (
-    <form onSubmit={onSubmit} className="rounded-xl border border bg-card p-5 shadow-sm">
+    <form onSubmit={onSubmit} className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-foreground">Quick Behavior Rule</h2>
       <div className="mt-2 flex flex-wrap gap-2">
         {RULE_PRESETS.map((preset) => (
@@ -63,7 +63,7 @@ export function BehaviorRuleFormCard({
           {showAdvanced ? 'Hide advanced options' : 'Show advanced options'}
         </button>
         {showAdvanced && (
-          <div className="space-y-3 rounded-lg border border bg-muted/50 p-3">
+          <div className="space-y-3 rounded-lg border border-border bg-muted/50 p-3">
             <div className="grid gap-3 md:grid-cols-2">
               <select value={form.matchType} onChange={(e) => onSetForm((c) => ({ ...c, matchType: e.target.value as 'contains' | 'equals' | 'regex' }))} className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2">
                 <option value="contains">Match type: contains</option>

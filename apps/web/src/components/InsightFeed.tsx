@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Insight } from '@/lib/types'
 import { supabase } from '../lib/supabase'
 
@@ -49,7 +49,7 @@ export default function InsightFeed({ userId }: InsightFeedProps) {
   const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState('')
 
-  const loadInsights = async (targetPage: number, mode: 'replace' | 'append') => {
+  const loadInsights = useCallback(async (targetPage: number, mode: 'replace' | 'append') => {
     if (mode === 'replace') {
       setFetching(true)
     } else {
@@ -92,14 +92,14 @@ export default function InsightFeed({ userId }: InsightFeedProps) {
     setHasMore(rows.length === INSIGHTS_PAGE_SIZE)
     setFetching(false)
     setLoadingMore(false)
-  }
+  }, [userId])
 
   useEffect(() => {
     setInsights([])
     setPage(1)
     setHasMore(false)
     void loadInsights(1, 'replace')
-  }, [userId])
+  }, [userId, loadInsights])
 
   const grouped = useMemo(() => {
     const map = new Map<string, Insight[]>()

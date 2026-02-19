@@ -89,4 +89,8 @@ body {
   .transition-colors-fast {
     @apply transition-colors duration-150 ease-in-out;
   }
+
+  .numeric-align {
+    @apply tabular-nums text-right;
+  }
 }

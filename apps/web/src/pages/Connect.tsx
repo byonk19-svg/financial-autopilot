@@ -6,6 +6,8 @@ import { captureException } from '../lib/errorReporting'
 import { fetchFunctionWithAuth } from '../lib/fetchWithAuth'
 import { useSession } from '../lib/session'
 
+const PENDING_SETUP_TOKEN_KEY = 'financial-autopilot:pending-setup-token'
+
 function LinkIcon() {
   return (
     <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -25,7 +27,10 @@ function LinkIcon() {
 export default function Connect() {
   const navigate = useNavigate()
   const { session, loading } = useSession()
-  const [setupToken, setSetupToken] = useState('')
+  const [setupToken, setSetupToken] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return window.sessionStorage.getItem(PENDING_SETUP_TOKEN_KEY) ?? ''
+  })
   const [status, setStatus] = useState<'idle' | 'checking' | 'connecting' | 'success' | 'error'>(
     'checking',
   )
@@ -35,7 +40,7 @@ export default function Connect() {
     const bootstrap = async () => {
       if (loading) return
       if (!session?.user) {
-        navigate('/login', { replace: true })
+        navigate('/login?next=/connect', { replace: true })
         return
       }
 
@@ -59,6 +64,16 @@ export default function Connect() {
 
     void bootstrap()
   }, [loading, navigate, session])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const trimmed = setupToken.trim()
+    if (trimmed.length === 0) {
+      window.sessionStorage.removeItem(PENDING_SETUP_TOKEN_KEY)
+      return
+    }
+    window.sessionStorage.setItem(PENDING_SETUP_TOKEN_KEY, setupToken)
+  }, [setupToken])
 
   const onConnect = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -92,6 +107,9 @@ export default function Connect() {
         throw new Error(payload.error ?? 'Connect request failed.')
       }
 
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(PENDING_SETUP_TOKEN_KEY)
+      }
       setStatus('success')
       setMessage('SimpleFIN connected successfully.')
       navigate('/dashboard', { replace: true })
@@ -104,20 +122,20 @@ export default function Connect() {
       setStatus('error')
       setMessage(text)
       if (text.includes('Please log in again')) {
-        navigate('/login', { replace: true })
+        navigate('/login?next=/connect', { replace: true })
       }
     }
   }
 
   return (
-    <section className="mx-auto max-w-lg rounded-xl border border bg-card p-6 shadow-sm">
+    <section className="mx-auto max-w-lg rounded-xl border border-border bg-card p-6 shadow-sm">
       <LinkIcon />
       <h1 className="text-center text-2xl font-semibold text-foreground">Connect SimpleFIN</h1>
       <p className="mt-2 text-center text-sm text-muted-foreground">
         Paste your setup token from the SimpleFIN Bridge create page.
       </p>
 
-      <div className="mt-4 rounded-lg border border bg-muted/30 px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+      <div className="mt-4 rounded-lg border border-border bg-muted/30 px-3 py-2 text-center text-xs font-medium text-muted-foreground">
         Step 1: Get token <span className="px-1">→</span> Step 2: Paste below <span className="px-1">→</span> Step
         3: Connect
       </div>
@@ -133,7 +151,7 @@ export default function Connect() {
           value={setupToken}
           onChange={(event) => setSetupToken(event.target.value)}
           placeholder="Paste setup token here"
-          className="w-full rounded-lg border border px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+          className="w-full rounded-lg border border-border px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
         />
 
         <div className="flex items-center gap-3">

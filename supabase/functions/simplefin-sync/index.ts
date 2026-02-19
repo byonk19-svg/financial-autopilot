@@ -7,6 +7,7 @@ import {
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { getCronSecret, getSimplefinConfig, getSupabaseConfig } from "../_shared/env.ts";
 import { normalizeMerchantForRecurring } from "../_shared/merchant.ts";
+import { evaluateRulesV1, type CategoryRuleV1, type TransactionRuleInputV1 } from "../_shared/rules_v1.ts";
 import { fetchAccounts } from "../_shared/simplefin.ts";
 
 const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } =
@@ -41,6 +42,30 @@ type AccountRow = {
 type UserPreference = {
   rawDescriptionDays: number;
   retentionMonths: number;
+};
+
+type ImportedTransactionSnapshot = {
+  accountId: string;
+  providerTransactionId: string;
+  amount: number;
+  merchantCanonical: string | null;
+  merchantNormalized: string | null;
+  descriptionShort: string;
+};
+
+type StoredTransactionForRules = {
+  id: string;
+  provider_transaction_id: string;
+  account_id: string;
+  amount: number | string;
+  merchant_canonical: string | null;
+  merchant_normalized: string | null;
+  description_short: string;
+  category_id: string | null;
+  user_category_id: string | null;
+  category_source: "user" | "rule" | "auto" | "import" | "unknown" | null;
+  classification_rule_ref: string | null;
+  classification_explanation: string | null;
 };
 
 function json(req: Request, data: unknown, status = 200): Response {
@@ -380,7 +405,12 @@ async function upsertTransactions(
 
   const batchSize = 500;
   for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
+    // Owner inheritance is handled by DB trigger (transactions <- accounts.owner).
+    // Strip owner from payload to avoid bypassing manual/account-level ownership rules.
+    const batch = rows.slice(i, i + batchSize).map((row) => {
+      const { owner: _owner, ...rest } = row;
+      return rest;
+    });
     const { error } = await adminClient
       .from("transactions")
       .upsert(batch, { onConflict: "account_id,provider_transaction_id" });
@@ -389,6 +419,132 @@ async function upsertTransactions(
       throw new HttpError(500, "Could not upsert transactions.");
     }
   }
+}
+
+async function fetchCategoryRulesV1(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<CategoryRuleV1[]> {
+  const { data, error } = await adminClient
+    .from("transaction_category_rules_v1")
+    .select("id, rule_type, merchant_pattern, account_id, min_amount, max_amount, category_id, is_active, created_at")
+    .eq("user_id", userId)
+    .eq("is_active", true);
+
+  if (error) {
+    throw new HttpError(500, "Could not load v1 transaction category rules.");
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    rule_type: row.rule_type,
+    merchant_pattern: row.merchant_pattern,
+    account_id: row.account_id,
+    min_amount: row.min_amount === null ? null : Number(row.min_amount),
+    max_amount: row.max_amount === null ? null : Number(row.max_amount),
+    category_id: row.category_id,
+    is_active: row.is_active === true,
+    created_at: row.created_at ?? undefined,
+  })) as CategoryRuleV1[];
+}
+
+async function getCategoryRulesV1ForUser(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  cache: Map<string, CategoryRuleV1[]>,
+): Promise<CategoryRuleV1[]> {
+  const cached = cache.get(userId);
+  if (cached) return cached;
+  const loaded = await fetchCategoryRulesV1(adminClient, userId);
+  cache.set(userId, loaded);
+  return loaded;
+}
+
+async function applyCategoryRulesV1AfterImport(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  accountId: string,
+  importedSnapshots: ImportedTransactionSnapshot[],
+  rules: CategoryRuleV1[],
+): Promise<number> {
+  if (importedSnapshots.length === 0 || rules.length === 0) {
+    return 0;
+  }
+
+  const snapshotByProviderId = new Map<string, ImportedTransactionSnapshot>();
+  for (const snapshot of importedSnapshots) {
+    snapshotByProviderId.set(snapshot.providerTransactionId, snapshot);
+  }
+
+  const providerIds = [...snapshotByProviderId.keys()];
+  const batchSize = 250;
+  let updatedCount = 0;
+
+  for (let i = 0; i < providerIds.length; i += batchSize) {
+    const providerBatch = providerIds.slice(i, i + batchSize);
+
+    const { data, error } = await adminClient
+      .from("transactions")
+      .select(
+        "id, provider_transaction_id, account_id, amount, merchant_canonical, merchant_normalized, description_short, category_id, user_category_id, category_source, classification_rule_ref, classification_explanation",
+      )
+      .eq("user_id", userId)
+      .eq("account_id", accountId)
+      .in("provider_transaction_id", providerBatch);
+
+    if (error) {
+      throw new HttpError(500, "Could not load transactions for v1 rule evaluation.");
+    }
+
+    for (const row of (data ?? []) as StoredTransactionForRules[]) {
+      const imported = snapshotByProviderId.get(row.provider_transaction_id);
+      if (!imported) continue;
+
+      const input: TransactionRuleInputV1 = {
+        accountId: imported.accountId,
+        amount: imported.amount,
+        merchantCanonical: imported.merchantCanonical ?? row.merchant_canonical,
+        merchantNormalized: imported.merchantNormalized ?? row.merchant_normalized,
+        descriptionShort: imported.descriptionShort || row.description_short || "Transaction",
+        userCategorySource: row.category_source,
+      };
+
+      const result = evaluateRulesV1(input, rules);
+      if (result.decision !== "matched_rule") continue;
+
+      const matchedRuleRef = `category_rule_v1:${result.matchedRule.id}`;
+      const nextCategoryId = result.matchedRule.category_id;
+      const shouldUpdate =
+        row.category_id !== nextCategoryId ||
+        row.user_category_id !== nextCategoryId ||
+        row.category_source !== "rule" ||
+        row.classification_rule_ref !== matchedRuleRef ||
+        row.classification_explanation !== result.reason;
+
+      if (!shouldUpdate) continue;
+
+      const { error: updateError } = await adminClient
+        .from("transactions")
+        .update({
+          category_id: nextCategoryId,
+          user_category_id: nextCategoryId,
+          category_source: "rule",
+          classification_rule_ref: matchedRuleRef,
+          classification_explanation: result.reason,
+        })
+        .eq("id", row.id)
+        .eq("user_id", userId)
+        .neq("category_source", "user");
+
+      if (updateError) {
+        throw new HttpError(500, "Could not apply v1 category rule to imported transactions.");
+      }
+
+      updatedCount += 1;
+    }
+  }
+
+  return updatedCount;
 }
 
 Deno.serve(async (req) => {
@@ -458,9 +614,11 @@ Deno.serve(async (req) => {
     const uniqueUserIds = [...new Set(safeConnections.map((connection) => connection.user_id))];
     const daysMap = await getRawDescriptionDaysMap(adminClient, uniqueUserIds);
     const userTransactionCountCache = new Map<string, number>();
+    const userRuleCache = new Map<string, CategoryRuleV1[]>();
 
     let accountsSynced = 0;
     let transactionsSynced = 0;
+    let categorizedByRules = 0;
     const seenAccountKeys = new Set<string>();
     const seenTransactionKeys = new Set<string>();
     const warnings: string[] = [];
@@ -587,6 +745,7 @@ Deno.serve(async (req) => {
             }
 
             const transactionRows: Record<string, unknown>[] = [];
+            const transactionSnapshots: ImportedTransactionSnapshot[] = [];
             const transactions = parseTransactions(accountObject);
 
             for (const transactionObject of transactions) {
@@ -631,6 +790,8 @@ Deno.serve(async (req) => {
               const descriptionFullExpiresAt = shouldStoreFull
                 ? addDays(postedAt, rawDescriptionDays)
                 : null;
+              const merchantCanonical = normalizeCanonicalMerchant(rawDescription || descriptionShort);
+              const merchantNormalized = normalizeMerchantForSearch(rawDescription);
 
               const transactionKey = `${account.id}:${providerTransactionId}`;
               if (!seenTransactionKeys.has(transactionKey)) {
@@ -650,13 +811,33 @@ Deno.serve(async (req) => {
                 description_short: descriptionShort,
                 description_full: descriptionFull,
                 description_full_expires_at: descriptionFullExpiresAt,
-                merchant_normalized: normalizeMerchantForSearch(rawDescription),
-                merchant_canonical: normalizeCanonicalMerchant(rawDescription || descriptionShort),
+                merchant_normalized: merchantNormalized,
+                merchant_canonical: merchantCanonical,
                 is_deleted: transactionObject.is_deleted === true || transactionObject.deleted === true,
+              });
+
+              transactionSnapshots.push({
+                accountId: account.id,
+                providerTransactionId,
+                amount: rawAmount,
+                merchantCanonical,
+                merchantNormalized,
+                descriptionShort,
               });
             }
 
             await upsertTransactions(adminClient, transactionRows);
+
+            if (transactionSnapshots.length > 0) {
+              const rules = await getCategoryRulesV1ForUser(adminClient, connection.user_id, userRuleCache);
+              categorizedByRules += await applyCategoryRulesV1AfterImport(
+                adminClient,
+                connection.user_id,
+                account.id,
+                transactionSnapshots,
+                rules,
+              );
+            }
           }
         }
       } catch (connectionSyncError) {
@@ -681,6 +862,7 @@ Deno.serve(async (req) => {
       connections: safeConnections.length,
       accountsSynced,
       transactionsSynced,
+      categorizedByRules,
       warnings,
     });
   } catch (error) {

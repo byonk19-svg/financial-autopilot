@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toNumber } from '../lib/subscriptionFormatters'
 import { captureException } from '../lib/errorReporting'
+import { getLoginRedirectPath } from '../lib/loginRedirect'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 
@@ -268,7 +269,7 @@ export default function Alerts() {
   useEffect(() => {
     if (loading) return
     if (!session?.user) {
-      navigate('/login', { replace: true })
+      navigate(getLoginRedirectPath(), { replace: true })
       return
     }
     void loadAlerts()
@@ -522,7 +523,7 @@ export default function Alerts() {
 
   return (
     <section className="space-y-4">
-      <div className="rounded-xl border border bg-card p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold text-foreground">Alerts</h1>
           <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
@@ -532,7 +533,7 @@ export default function Alerts() {
         <p className="mt-2 text-sm text-muted-foreground">Active alerts sorted by newest first.</p>
       </div>
 
-      <div className="rounded-xl border border bg-card p-4 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
@@ -577,7 +578,7 @@ export default function Alerts() {
             <button
               type="button"
               onClick={clearFilters}
-              className="h-10 rounded-lg border border px-3 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted"
+              className="h-10 rounded-lg border border-border px-3 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted"
             >
               Clear filters
             </button>
@@ -586,7 +587,7 @@ export default function Alerts() {
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="rounded-xl border border bg-card p-4 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-medium text-foreground">
               {selectedIds.length} selected
@@ -596,7 +597,7 @@ export default function Alerts() {
                 type="button"
                 onClick={() => void runBulkMarkRead()}
                 disabled={bulkUpdating !== '' || updatingId !== ''}
-                className="rounded-lg border border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {bulkUpdating === 'read' ? 'Updating...' : 'Mark selected read'}
               </button>
@@ -614,7 +615,7 @@ export default function Alerts() {
       )}
 
       {!fetching && alerts.length > 0 && (
-        <div className="rounded-xl border border bg-card p-4 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
@@ -630,7 +631,7 @@ export default function Alerts() {
       <div className="space-y-3">
         {fetching ? (
           Array.from({ length: 3 }).map((_, index) => (
-            <article key={index} className="rounded-xl border border bg-card p-5 shadow-sm">
+            <article key={index} className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-6 w-14 animate-pulse rounded-md bg-muted" />
@@ -648,7 +649,7 @@ export default function Alerts() {
             </article>
           ))
         ) : alerts.length === 0 ? (
-          <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border bg-card p-6 text-center shadow-sm">
+          <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-border bg-card p-6 text-center shadow-sm">
             <CheckCircleIcon className="h-10 w-10 text-muted-foreground/60" />
             <p className="mt-3 text-base font-medium text-foreground">All clear - no active alerts</p>
           </div>
@@ -703,7 +704,7 @@ export default function Alerts() {
                 <button
                   onClick={() => void markRead(alert)}
                   disabled={Boolean(alert.read_at) || updatingId === alert.id || bulkUpdating !== ''}
-                  className="rounded-lg border border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {alert.read_at ? 'Read' : updatingId === alert.id ? 'Updating...' : 'Mark read'}
                 </button>
@@ -745,7 +746,7 @@ export default function Alerts() {
                     type="button"
                     onClick={() => void removeFeedback(alert)}
                     disabled={updatingId === alert.id || bulkUpdating !== ''}
-                    className="rounded-lg border border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {updatingId === alert.id ? 'Saving...' : 'Remove feedback'}
                   </button>
@@ -753,14 +754,14 @@ export default function Alerts() {
                 <button
                   type="button"
                   onClick={() => toggleReasoning(alert.id)}
-                  className="rounded-lg border border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted"
+                  className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted"
                 >
                   {expandedIds.includes(alert.id) ? 'Hide reasoning' : 'Why did this fire?'}
                 </button>
               </div>
 
               {expandedIds.includes(alert.id) && (
-                <div className="mt-4 rounded-lg border border bg-background/70 p-3">
+                <div className="mt-4 rounded-lg border border-border bg-background/70 p-3">
                   <h3 className="text-sm font-semibold text-foreground">Why did this fire?</h3>
                   {feedbackForAlert && (
                     <p className="mt-2 text-xs text-muted-foreground">
@@ -771,7 +772,7 @@ export default function Alerts() {
                   {alert.reasoning && Object.keys(alert.reasoning).length > 0 ? (
                     <dl className="mt-2 grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
                       {Object.entries(alert.reasoning).map(([key, value]) => (
-                        <div key={`${alert.id}-${key}`} className="rounded-md border border bg-card px-2 py-1.5">
+                        <div key={`${alert.id}-${key}`} className="rounded-md border border-border bg-card px-2 py-1.5">
                           <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                             {humanizeReasoningKey(key)}
                           </dt>

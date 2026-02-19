@@ -16,7 +16,7 @@ export function TransactionFilterChips({ chips, onRemoveChip, onClearAll }: Tran
           key={chip.key}
           type="button"
           onClick={() => onRemoveChip(chip.key)}
-          className="inline-flex items-center gap-2 rounded-full border border bg-muted/60 px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Remove ${chip.label} filter`}
         >
           <span className="truncate max-w-[20rem]">{chip.label}</span>

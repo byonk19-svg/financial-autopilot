@@ -6,6 +6,7 @@ import { SubscriptionLoadingSkeleton } from '@/components/subscriptions/Subscrip
 import { SubscriptionSection } from '@/components/subscriptions/SubscriptionSection'
 import { SubscriptionStats } from '@/components/subscriptions/SubscriptionStats'
 import { useSubscriptions } from '@/hooks/useSubscriptions'
+import { getLoginRedirectPath } from '@/lib/loginRedirect'
 import { useSession } from '@/lib/session'
 
 export default function Subscriptions() {
@@ -55,7 +56,7 @@ export default function Subscriptions() {
   useEffect(() => {
     if (loading) return
     if (!session?.user) {
-      navigate('/login', { replace: true })
+      navigate(getLoginRedirectPath(), { replace: true })
     }
   }, [loading, navigate, session])
 

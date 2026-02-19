@@ -6,6 +6,7 @@ import { BehaviorRuleFormCard } from '@/components/rules/BehaviorRuleFormCard'
 import { BehaviorRulesList } from '@/components/rules/BehaviorRulesList'
 import { RulesHeader } from '@/components/rules/RulesHeader'
 import { useRules } from '@/hooks/useRules'
+import { getLoginRedirectPath } from '@/lib/loginRedirect'
 import { useSession } from '@/lib/session'
 
 export default function Rules() {
@@ -43,7 +44,7 @@ export default function Rules() {
   useEffect(() => {
     if (loading) return
     if (!session?.user) {
-      navigate('/login', { replace: true })
+      navigate(getLoginRedirectPath(), { replace: true })
     }
   }, [loading, navigate, session])
 

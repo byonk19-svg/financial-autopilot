@@ -4,9 +4,8 @@ import type {
   SubscriptionHistoryRow,
   SubscriptionRecord,
 } from '@/lib/types'
-import { getAccessToken } from '@/lib/auth'
 import { captureException } from '@/lib/errorReporting'
-import { functionUrl } from '@/lib/functions'
+import { fetchFunctionWithAuth } from '@/lib/fetchWithAuth'
 import {
   hasPriceIncrease,
   parseDate,
@@ -66,16 +65,8 @@ export function useSubscriptions(userId: string | undefined) {
   })
 
   const fetchRecurring = useCallback(async (): Promise<SubscriptionRecord[]> => {
-    const token = await getAccessToken()
-    if (!token) {
-      throw new Error('Your session expired. Please log in again.')
-    }
-
-    const response = await fetch(functionUrl('recurring'), {
+    const response = await fetchFunctionWithAuth('recurring', {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     })
 
     const payload = (await response.json().catch(() => ({}))) as
@@ -98,11 +89,11 @@ export function useSubscriptions(userId: string | undefined) {
     return orderedClasses.flatMap((classification) =>
       (grouped?.[classification] ?? []).map((row) => ({
         ...row,
-            classification: normalizeClassification(row.classification ?? 'needs_review'),
-            is_false_positive: row.is_false_positive === true,
-            user_locked: row.user_locked === true,
-            is_active: true,
-          })),
+        classification: normalizeClassification(row.classification ?? 'needs_review'),
+        is_false_positive: row.is_false_positive === true,
+        user_locked: row.user_locked === true,
+        is_active: true,
+      })),
     )
   }, [])
 
@@ -110,16 +101,10 @@ export function useSubscriptions(userId: string | undefined) {
     subscriptionId: string,
     body: { classification: SubscriptionClassification; lock?: boolean; createRule?: boolean },
   ) => {
-    const token = await getAccessToken()
-    if (!token) {
-      throw new Error('Your session expired. Please log in again.')
-    }
-
-    const response = await fetch(functionUrl(`recurring/${subscriptionId}/classify`), {
+    const response = await fetchFunctionWithAuth(`recurring/${subscriptionId}/classify`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
     })
@@ -144,18 +129,10 @@ export function useSubscriptions(userId: string | undefined) {
 
       setHistoryLoadingIds((current) => ({ ...current, [subscriptionId]: true }))
       try {
-        const token = await getAccessToken()
-        if (!token) {
-          throw new Error('Your session expired. Please log in again.')
-        }
-
-        const response = await fetch(
-          `${functionUrl(`recurring/${subscriptionId}/history`)}?limit=${Math.max(6, Math.min(12, limit))}`,
+        const response = await fetchFunctionWithAuth(
+          `recurring/${subscriptionId}/history?limit=${Math.max(6, Math.min(12, limit))}`,
           {
             method: 'GET',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
           },
         )
 
@@ -290,17 +267,21 @@ export function useSubscriptions(userId: string | undefined) {
       }
 
       if (rerunAfterMark) {
-        const { error: invokeError } = await supabase.functions.invoke('analysis-daily', {
-          body: {},
+        const response = await fetchFunctionWithAuth('analysis-daily', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
         })
-
-        if (invokeError) {
-          captureException(invokeError, {
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { error?: string; detail?: string }
+          captureException(new Error(payload.detail ?? payload.error ?? 'Could not re-run analysis.'), {
             component: 'useSubscriptions',
             action: 'rerun-after-false-positive',
             subscription_id: subscription.id,
           })
-          setError('Saved as false positive, but could not re-run analysis.')
+          setError(payload.detail ?? payload.error ?? 'Saved as false positive, but could not re-run analysis.')
         } else {
           await loadSubscriptions()
         }
@@ -525,12 +506,17 @@ export function useSubscriptions(userId: string | undefined) {
     setError('')
 
     try {
-      const { error: invokeError } = await supabase.functions.invoke('analysis-daily', {
-        body: {},
+      const response = await fetchFunctionWithAuth('analysis-daily', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
       })
 
-      if (invokeError) {
-        throw invokeError
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string; detail?: string }
+        throw new Error(payload.detail ?? payload.error ?? 'Could not re-run detection from this environment.')
       }
 
       await loadSubscriptions()

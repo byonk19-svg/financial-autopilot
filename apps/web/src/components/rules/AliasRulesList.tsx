@@ -17,7 +17,7 @@ export function AliasRulesList({
   onDeleteAlias,
 }: AliasRulesListProps) {
   return (
-    <div className="rounded-xl border border bg-card p-5 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-foreground">Saved Alias Rules</h2>
       {fetching ? (
         <p className="mt-3 text-sm text-muted-foreground">Loading...</p>
@@ -26,7 +26,7 @@ export function AliasRulesList({
       ) : (
         <div className="mt-3 space-y-2">
           {aliases.map((row) => (
-            <div key={row.id} className="rounded-lg border border bg-card p-3">
+            <div key={row.id} className="rounded-lg border border-border bg-card p-3">
               <p className="text-sm text-foreground">
                 If transaction text <strong>{row.match_type}</strong> "<strong>{row.pattern}</strong>", rename merchant to{' '}
                 <strong>{row.normalized}</strong>.
