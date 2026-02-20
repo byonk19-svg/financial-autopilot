@@ -9,7 +9,13 @@ import type {
 } from '@/lib/types'
 import { hasPriceIncrease, type DensityMode } from '@/lib/subscriptionFormatters'
 
-function ListHeaderRow({ density }: { density: DensityMode }) {
+function ListHeaderRow({
+  density,
+  showClassifyControl,
+}: {
+  density: DensityMode
+  showClassifyControl: boolean
+}) {
   const compact = density === 'compact'
   return (
     <div
@@ -21,7 +27,7 @@ function ListHeaderRow({ density }: { density: DensityMode }) {
       <span className="text-right">Last</span>
       <span className="text-right">Previous</span>
       <span className="text-right">Next expected</span>
-      <span className="text-right">Action</span>
+      <span className="text-right">{showClassifyControl ? 'Classify / Action' : 'Action'}</span>
     </div>
   )
 }
@@ -106,7 +112,7 @@ export function SubscriptionSection({
             <p className={`text-muted-foreground ${compact ? 'text-xs' : 'text-sm'}`}>{emptyText}</p>
           ) : (
             <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
-              <ListHeaderRow density={density} />
+              <ListHeaderRow density={density} showClassifyControl={showClassifyControl} />
               {rows.map((subscription) => (
                 <SubscriptionRow
                   key={subscription.id}

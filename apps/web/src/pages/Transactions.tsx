@@ -22,6 +22,33 @@ import { useSession } from '../lib/session'
 
 const PAGE_SIZE = 50
 const UNCATEGORIZED_VALUE = '__uncategorized__'
+const FALLBACK_CATEGORY_NAMES = [
+  'Payroll - Brianna',
+  'Payroll - Elaine',
+  'Other Income',
+  'Groceries',
+  'Dining & Restaurants',
+  'Streaming & Apps',
+  'Shopping',
+  'Utilities & Internet',
+  'Phone',
+  'Mortgage & Housing',
+  'Auto & Gas',
+  'Healthcare',
+  'Fertility - Progyny',
+  'Pharmacy',
+  'Insurance',
+  'Investing',
+  'Savings Transfer',
+  'Credit Card Payment',
+  'Loan Payment',
+  'Childcare & School',
+  'Pet',
+  'Travel',
+  'Fees & Charges',
+  'Cash & ATM',
+  'Other',
+] as const
 type SortColumn = 'posted_at' | 'amount' | 'merchant_normalized'
 type SortDirection = 'asc' | 'desc'
 type TransactionViewPreset = 'all' | 'elaine_income' | 'household_bills' | 'brianna_savings'
@@ -830,7 +857,71 @@ export default function Transactions() {
         }
 
         setAccounts((accountsResult.data ?? []) as AccountOption[])
-        setCategories((categoriesResult.data ?? []) as CategoryOption[])
+
+        let nextCategories = (categoriesResult.data ?? []) as CategoryOption[]
+        const hasSeededCategories = nextCategories.some(
+          (category) => category.name.trim().toLowerCase() !== 'uncategorized',
+        )
+
+        if (!hasSeededCategories) {
+          const seedResult = await supabase.rpc('seed_user_categories')
+          if (seedResult.error) {
+            captureException(seedResult.error, {
+              component: 'Transactions',
+              action: 'seed-user-categories',
+            })
+
+            const fallbackSeedResult = await supabase.from('categories').upsert(
+              FALLBACK_CATEGORY_NAMES.map((name) => ({
+                user_id: session.user.id,
+                name,
+              })),
+              {
+                onConflict: 'user_id,name',
+                ignoreDuplicates: true,
+              },
+            )
+
+            if (fallbackSeedResult.error) {
+              captureException(fallbackSeedResult.error, {
+                component: 'Transactions',
+                action: 'seed-user-categories-fallback',
+              })
+            }
+          } else {
+            const refreshedCategoriesResult = await supabase
+              .from('categories')
+              .select('id, name')
+              .eq('user_id', session.user.id)
+              .order('name', { ascending: true })
+
+            if (refreshedCategoriesResult.error) {
+              captureException(refreshedCategoriesResult.error, {
+                component: 'Transactions',
+                action: 'reload-seeded-categories',
+              })
+            } else {
+              nextCategories = (refreshedCategoriesResult.data ?? []) as CategoryOption[]
+            }
+          }
+
+          const fallbackRefreshedCategoriesResult = await supabase
+            .from('categories')
+            .select('id, name')
+            .eq('user_id', session.user.id)
+            .order('name', { ascending: true })
+
+          if (fallbackRefreshedCategoriesResult.error) {
+            captureException(fallbackRefreshedCategoriesResult.error, {
+              component: 'Transactions',
+              action: 'reload-fallback-categories',
+            })
+          } else {
+            nextCategories = (fallbackRefreshedCategoriesResult.data ?? []) as CategoryOption[]
+          }
+        }
+
+        setCategories(nextCategories)
       } catch (error) {
         captureException(error, {
           component: 'Transactions',

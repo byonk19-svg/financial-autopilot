@@ -226,7 +226,28 @@ export function SubscriptionRow({
             <p className={`${compact ? 'text-[11px]' : 'text-xs'} text-muted-foreground`}>{renewalLabel}</p>
           </div>
 
-          <div className="flex justify-start xl:justify-end">
+          <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
+            {showClassifyControl && onSetClassification && (
+              <select
+                aria-label={`Classify ${merchant}`}
+                value={classification}
+                disabled={isUpdating}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) =>
+                  void onSetClassification(
+                    event.target.value as SubscriptionClassification,
+                    applyToFutureCharges,
+                  )
+                }
+                className={`rounded-md border bg-background text-foreground ${compact ? 'h-7 px-2 text-[11px]' : 'h-8 px-2.5 text-xs'}`}
+              >
+                <option value="needs_review">Needs review</option>
+                <option value="subscription">Subscription</option>
+                <option value="bill_loan">Bills/Loans</option>
+                <option value="transfer">Transfers</option>
+                <option value="ignore">Ignored</option>
+              </select>
+            )}
             <Button
               type="button"
               variant="outline"
