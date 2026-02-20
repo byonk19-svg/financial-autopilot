@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { TransactionFilterChips } from '@/components/transactions/TransactionFilterChips'
@@ -194,6 +195,10 @@ export default function Transactions() {
   const [accountFilter, setAccountFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [createCategoryForTxnId, setCreateCategoryForTxnId] = useState<string | null>(null)
+  const [createCategoryName, setCreateCategoryName] = useState('')
+  const [createCategorySubmitting, setCreateCategorySubmitting] = useState(false)
+  const [createCategoryError, setCreateCategoryError] = useState('')
   const selectVisibleRef = useRef<HTMLInputElement>(null)
 
   const handleStartDateChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1051,6 +1056,44 @@ export default function Transactions() {
     [categoryNameById, session, transactions],
   )
 
+  const createCategory = useCallback(async () => {
+    if (!session?.user || !createCategoryForTxnId) return
+    const name = createCategoryName.trim()
+    if (!name) {
+      setCreateCategoryError('Name is required.')
+      return
+    }
+    setCreateCategorySubmitting(true)
+    setCreateCategoryError('')
+
+    const { data, error: insertError } = await supabase
+      .from('categories')
+      .insert({ user_id: session.user.id, name })
+      .select('id, name')
+      .single()
+
+    if (insertError) {
+      captureException(insertError, { component: 'Transactions', action: 'create-category' })
+      setCreateCategoryError(
+        insertError.code === '23505'
+          ? 'A category with that name already exists.'
+          : 'Could not create category.',
+      )
+      setCreateCategorySubmitting(false)
+      return
+    }
+
+    const newCategory = data as CategoryOption
+    setCategories((current) =>
+      [...current, newCategory].sort((a, b) => a.name.localeCompare(b.name)),
+    )
+    const txnId = createCategoryForTxnId
+    setCreateCategoryForTxnId(null)
+    setCreateCategoryName('')
+    setCreateCategorySubmitting(false)
+    void updateTransactionCategory(txnId, newCategory.id)
+  }, [createCategoryForTxnId, createCategoryName, session?.user, updateTransactionCategory])
+
   const applyBulkCategoryUpdate = useCallback(
     async (nextCategoryValue: string | null) => {
       if (!session?.user || selectedIdsArray.length === 0 || bulkUpdating) return
@@ -1509,6 +1552,17 @@ export default function Transactions() {
                                       </DropdownMenuRadioItem>
                                     ))}
                                   </DropdownMenuRadioGroup>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onSelect={() => {
+                                      setCreateCategoryForTxnId(transaction.id)
+                                      setCreateCategoryName('')
+                                      setCreateCategoryError('')
+                                    }}
+                                    className="text-primary"
+                                  >
+                                    + New category...
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             )}
@@ -2074,6 +2128,62 @@ export default function Transactions() {
                 ? 'Saving rule...'
                 : 'Always categorize this way'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {createCategoryForTxnId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-category-title"
+        >
+          <div className="w-full max-w-sm rounded-xl border border bg-card p-5 shadow-xl">
+            <h3 id="create-category-title" className="text-lg font-semibold text-foreground">
+              New category
+            </h3>
+            <form
+              className="mt-4 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void createCategory()
+              }}
+            >
+              <input
+                autoFocus
+                type="text"
+                value={createCategoryName}
+                onChange={(e) => setCreateCategoryName(e.target.value)}
+                placeholder="Category name"
+                disabled={createCategorySubmitting}
+                className="w-full rounded-md border border px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              />
+              {createCategoryError && (
+                <p className="text-sm text-rose-600">{createCategoryError}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={createCategorySubmitting}
+                  onClick={() => {
+                    setCreateCategoryForTxnId(null)
+                    setCreateCategoryName('')
+                    setCreateCategoryError('')
+                  }}
+                  className="rounded-md border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createCategorySubmitting || !createCategoryName.trim()}
+                  className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {createCategorySubmitting ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
