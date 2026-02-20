@@ -194,6 +194,7 @@ export default function Transactions() {
   const [accountFilter, setAccountFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const selectVisibleRef = useRef<HTMLInputElement>(null)
 
   const handleStartDateChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -839,6 +840,14 @@ export default function Transactions() {
   }, [loading, navigate, session])
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 300)
+
+    return () => window.clearTimeout(timeout)
+  }, [search])
+
+  useEffect(() => {
     let active = true
 
     const loadTransactions = async () => {
@@ -851,7 +860,7 @@ export default function Transactions() {
 
         const from = (page - 1) * PAGE_SIZE
         const to = from + PAGE_SIZE - 1
-        const searchQuery = search.trim().replace(/[(),]/g, ' ')
+        const searchQuery = debouncedSearch.trim().replace(/[(),]/g, ' ')
 
         let query = supabase
           .from('transactions')
@@ -984,7 +993,7 @@ export default function Transactions() {
     return () => {
       active = false
     }
-  }, [accountFilter, categoryFilter, createSplitDraftFromRows, endDate, loading, page, refreshNonce, search, session, sortColumn, sortDirection, startDate, viewPreset])
+  }, [accountFilter, categoryFilter, createSplitDraftFromRows, endDate, loading, page, refreshNonce, debouncedSearch, session, sortColumn, sortDirection, startDate, viewPreset])
 
   const updateTransactionCategory = useCallback(
     async (txnId: string, nextValue: string) => {
@@ -998,7 +1007,7 @@ export default function Transactions() {
         current.map((row) => {
           if (row.id !== txnId) return row
           previousCategoryId = row.category_id
-          return { ...row, category_id }
+          return { ...row, category_id, user_category_id: category_id }
         }),
       )
       setCategoryUpdatingIds((current) => {
@@ -1009,7 +1018,7 @@ export default function Transactions() {
 
       const { error: updateError } = await supabase
         .from('transactions')
-        .update({ category_id })
+        .update({ category_id, user_category_id: category_id })
         .eq('id', txnId)
 
       if (updateError) {
@@ -1065,7 +1074,7 @@ export default function Transactions() {
         current.map((row) => {
           if (!targetIdSet.has(row.id)) return row
           previousCategoryById.set(row.id, row.category_id)
-          return { ...row, category_id: nextCategoryId }
+          return { ...row, category_id: nextCategoryId, user_category_id: nextCategoryId }
         }),
       )
       setCategoryUpdatingIds((current) => {
@@ -1076,7 +1085,7 @@ export default function Transactions() {
 
       const { data: updatedRows, error: bulkUpdateError } = await supabase
         .from('transactions')
-        .update({ category_id: nextCategoryId })
+        .update({ category_id: nextCategoryId, user_category_id: nextCategoryId })
         .in('id', targetIds)
         .select('id')
 
@@ -1089,7 +1098,7 @@ export default function Transactions() {
         setTransactions((current) =>
           current.map((row) =>
             targetIdSet.has(row.id)
-              ? { ...row, category_id: previousCategoryById.get(row.id) ?? null }
+              ? { ...row, category_id: previousCategoryById.get(row.id) ?? null, user_category_id: previousCategoryById.get(row.id) ?? null }
               : row,
           ),
         )
@@ -1107,7 +1116,7 @@ export default function Transactions() {
           setTransactions((current) =>
             current.map((row) =>
               failedSet.has(row.id)
-                ? { ...row, category_id: previousCategoryById.get(row.id) ?? null }
+                ? { ...row, category_id: previousCategoryById.get(row.id) ?? null, user_category_id: previousCategoryById.get(row.id) ?? null }
                 : row,
             ),
           )
