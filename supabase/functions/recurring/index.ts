@@ -238,7 +238,7 @@ async function listSubscriptionHistory(
 
   const searchParams = new URL(req.url).searchParams;
   const requestedLimit = toInt(searchParams.get("limit"));
-  const limit = requestedLimit === null ? 8 : Math.max(6, Math.min(12, requestedLimit));
+  const limit = requestedLimit === null ? 24 : Math.max(6, Math.min(48, requestedLimit));
 
   const [canonicalResult, normalizedResult] = await Promise.all([
     admin
@@ -302,11 +302,23 @@ async function listSubscriptionHistory(
     account_name: accountNames.get(row.account_id) ?? null,
   }));
 
+  const daily_totals: Record<string, number> = {};
+  for (const row of history) {
+    const day = row.posted_at.slice(0, 10);
+    const absAmount = Math.abs(
+      typeof row.amount === "number" ? row.amount : Number.parseFloat(String(row.amount)),
+    );
+    if (Number.isFinite(absAmount)) {
+      daily_totals[day] = round2((daily_totals[day] ?? 0) + absAmount);
+    }
+  }
+
   return json(req, {
     ok: true,
     recurring_id: recurringId,
     merchant_normalized: recurring.merchant_normalized,
     history,
+    daily_totals,
     count: history.length,
   });
 }

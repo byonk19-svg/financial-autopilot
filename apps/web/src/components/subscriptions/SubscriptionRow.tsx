@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,7 @@ export type SubscriptionRowProps = {
   isUpdating: boolean
   historyRows: SubscriptionHistoryRow[]
   historyLoading: boolean
+  dailyTotals?: Record<string, number>
   onExpandChange?: (expanded: boolean) => void
   onMarkFalsePositive?: (rerunAfterMark: boolean) => void | Promise<void>
   onMarkInactive: () => void | Promise<void>
@@ -71,6 +72,7 @@ export function SubscriptionRow({
   isUpdating,
   historyRows,
   historyLoading,
+  dailyTotals = {},
   onExpandChange,
   onMarkFalsePositive,
   onMarkInactive,
@@ -102,7 +104,15 @@ export function SubscriptionRow({
   const effectiveNotify = effectiveNotifyDays({ cadence, notifyDaysBefore })
   const notifyFieldId = `notify-${merchant.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${cadence}`
   const falsePositiveFieldId = `false-positive-rerun-${merchant.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${cadence}`
-  const historyAmounts = historyRows.map((row) => Math.abs(toNumber(row.amount)))
+  const seenDaysForTrend = new Set<string>()
+  const historyAmounts: number[] = []
+  for (const row of historyRows) {
+    const day = row.posted_at.slice(0, 10)
+    if (seenDaysForTrend.has(day)) continue
+    seenDaysForTrend.add(day)
+    const dayTotal = dailyTotals[day]
+    historyAmounts.push(typeof dayTotal === 'number' ? dayTotal : Math.abs(toNumber(row.amount)))
+  }
   const latestHistoryAmount = historyAmounts[0] ?? 0
   const priorAverageAmount =
     historyAmounts.length > 1
@@ -110,7 +120,7 @@ export function SubscriptionRow({
       : 0
   const trendRatio = priorAverageAmount > 0 ? (latestHistoryAmount - priorAverageAmount) / priorAverageAmount : 0
   const trendLabel =
-    historyRows.length < 2
+    historyAmounts.length < 2
       ? 'Trend: need at least 2 charges'
       : Math.abs(trendRatio) < 0.03
         ? `Trend: stable vs recent average (${toCurrency(priorAverageAmount)})`
@@ -420,24 +430,83 @@ export function SubscriptionRow({
                   </p>
                 ) : (
                   <ul className={`mt-2 divide-y rounded-md border bg-background ${compact ? 'text-xs' : 'text-sm'}`}>
-                    {historyRows.map((row) => (
-                      <li
-                        key={row.id}
-                        className={`grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_auto] ${
-                          compact ? 'px-2.5 py-1.5' : 'px-3 py-2'
-                        }`}
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-foreground">{row.description_short}</p>
-                          <p className={`text-muted-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
-                            {toShortDate(row.posted_at)} | {row.account_name ?? 'Unknown account'}
-                          </p>
-                        </div>
-                        <p className="font-medium text-foreground">
-                          {toCurrency(Math.abs(toNumber(row.amount)))}
-                        </p>
-                      </li>
-                    ))}
+                    {(() => {
+                      const grouped = new Map<string, SubscriptionHistoryRow[]>()
+                      for (const row of historyRows) {
+                        const day = row.posted_at.slice(0, 10)
+                        const existing = grouped.get(day) ?? []
+                        existing.push(row)
+                        grouped.set(day, existing)
+                      }
+
+                      const renderedDays = new Set<string>()
+                      const items: React.ReactNode[] = []
+
+                      for (const row of historyRows) {
+                        const day = row.posted_at.slice(0, 10)
+                        if (renderedDays.has(day)) continue
+                        renderedDays.add(day)
+
+                        const dayRows = grouped.get(day) ?? []
+                        const dayTotal = dailyTotals[day]
+                        const isGrouped = dayRows.length > 1 && typeof dayTotal === 'number'
+
+                        if (isGrouped) {
+                          items.push(
+                            <li
+                              key={`total-${day}`}
+                              className={`flex items-center justify-between bg-muted/30 font-medium text-foreground ${
+                                compact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
+                              }`}
+                            >
+                              <span>{toShortDate(day)} — {dayRows.length} charges</span>
+                              <span>{toCurrency(dayTotal)}</span>
+                            </li>,
+                          )
+                          for (const groupedRow of dayRows) {
+                            items.push(
+                              <li
+                                key={groupedRow.id}
+                                className={`grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_auto] ${
+                                  compact ? 'py-1 pl-5 pr-2.5' : 'py-1.5 pl-6 pr-3'
+                                }`}
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-foreground">{groupedRow.description_short}</p>
+                                  <p className={`text-muted-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
+                                    {groupedRow.account_name ?? 'Unknown account'}
+                                  </p>
+                                </div>
+                                <p className="text-muted-foreground">
+                                  {toCurrency(Math.abs(toNumber(groupedRow.amount)))}
+                                </p>
+                              </li>,
+                            )
+                          }
+                        } else {
+                          items.push(
+                            <li
+                              key={row.id}
+                              className={`grid grid-cols-1 gap-1 sm:grid-cols-[minmax(0,1fr)_auto] ${
+                                compact ? 'px-2.5 py-1.5' : 'px-3 py-2'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-foreground">{row.description_short}</p>
+                                <p className={`text-muted-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
+                                  {toShortDate(row.posted_at)} | {row.account_name ?? 'Unknown account'}
+                                </p>
+                              </div>
+                              <p className="font-medium text-foreground">
+                                {toCurrency(Math.abs(toNumber(row.amount)))}
+                              </p>
+                            </li>,
+                          )
+                        }
+                      }
+
+                      return items
+                    })()}
                   </ul>
                 )}
 

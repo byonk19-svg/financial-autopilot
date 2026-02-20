@@ -24,6 +24,7 @@ type GroupedRecurringResponse = {
 type SubscriptionHistoryResponse = {
   ok: boolean
   history: SubscriptionHistoryRow[]
+  daily_totals?: Record<string, number>
 }
 
 export type CadenceFilter = 'all' | 'weekly' | 'monthly' | 'annual'
@@ -56,6 +57,9 @@ export function useSubscriptions(userId: string | undefined) {
   const [rerunningDetection, setRerunningDetection] = useState(false)
   const [historyBySubscriptionId, setHistoryBySubscriptionId] = useState<
     Record<string, SubscriptionHistoryRow[]>
+  >({})
+  const [dailyTotalsBySubscriptionId, setDailyTotalsBySubscriptionId] = useState<
+    Record<string, Record<string, number>>
   >({})
   const [historyLoadingIds, setHistoryLoadingIds] = useState<Record<string, boolean>>({})
   const [density, setDensity] = useState<DensityMode>(() => {
@@ -122,7 +126,7 @@ export function useSubscriptions(userId: string | undefined) {
   }, [])
 
   const loadSubscriptionHistory = useCallback(
-    async (subscriptionId: string, limit = 8, forceRefresh = false): Promise<void> => {
+    async (subscriptionId: string, limit = 24, forceRefresh = false): Promise<void> => {
       if (!forceRefresh && historyBySubscriptionId[subscriptionId]) {
         return
       }
@@ -130,7 +134,7 @@ export function useSubscriptions(userId: string | undefined) {
       setHistoryLoadingIds((current) => ({ ...current, [subscriptionId]: true }))
       try {
         const response = await fetchFunctionWithAuth(
-          `recurring/${subscriptionId}/history?limit=${Math.max(6, Math.min(12, limit))}`,
+          `recurring/${subscriptionId}/history?limit=${Math.max(6, Math.min(48, limit))}`,
           {
             method: 'GET',
           },
@@ -146,9 +150,14 @@ export function useSubscriptions(userId: string | undefined) {
           )
         }
 
+        const typedPayload = payload as SubscriptionHistoryResponse
         setHistoryBySubscriptionId((current) => ({
           ...current,
-          [subscriptionId]: (payload as SubscriptionHistoryResponse).history ?? [],
+          [subscriptionId]: typedPayload.history ?? [],
+        }))
+        setDailyTotalsBySubscriptionId((current) => ({
+          ...current,
+          [subscriptionId]: typedPayload.daily_totals ?? {},
         }))
       } catch (historyError) {
         captureException(historyError, {
@@ -703,6 +712,7 @@ export function useSubscriptions(userId: string | undefined) {
     rerunDetection,
     loadSubscriptions,
     historyBySubscriptionId,
+    dailyTotalsBySubscriptionId,
     historyLoadingIds,
     formattedMonthlySubscriptionsTotal: toCurrency(monthlySubscriptionsTotal),
     formattedBillsAndLoansTotal: toCurrency(billsAndLoansTotal),

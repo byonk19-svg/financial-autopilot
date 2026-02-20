@@ -24,6 +24,16 @@ function toRecurringCharge(tx: TxRow): RecurringCharge | null {
   return { day: toUtcDayKey(tx.posted_at), absAmount: amount };
 }
 
+function sumByDay(charges: RecurringCharge[]): RecurringCharge[] {
+  const totals = new Map<string, number>();
+  for (const charge of charges) {
+    totals.set(charge.day, (totals.get(charge.day) ?? 0) + charge.absAmount);
+  }
+  return [...totals.entries()]
+    .map(([day, absAmount]) => ({ day, absAmount: round2(absAmount) }))
+    .sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+
 function normalizeKindHint(kindHint: string | null): RecurringKind | null {
   if (!kindHint) return null;
   const normalized = kindHint.trim().toLowerCase();
@@ -184,7 +194,7 @@ export function buildSubscriptionCandidates(
 
   const grouped180 = groupRecurringByMerchant(tx180);
   for (const [merchantKey, group] of grouped180.entries()) {
-    const detection = detectRecurringPattern(group.charges, ["weekly", "monthly", "quarterly"]);
+    const detection = detectRecurringPattern(sumByDay(group.charges), ["weekly", "monthly", "quarterly"]);
     const candidate = buildCandidateFromDetection(userId, merchantKey, group, detection);
     if (!candidate) continue;
     const key = `${candidate.merchant_normalized}:${candidate.cadence}`;
@@ -195,7 +205,7 @@ export function buildSubscriptionCandidates(
 
   const grouped730 = groupRecurringByMerchant(tx730);
   for (const [merchantKey, group] of grouped730.entries()) {
-    const detection = detectRecurringPattern(group.charges, ["yearly"]);
+    const detection = detectRecurringPattern(sumByDay(group.charges), ["yearly"]);
     const candidate = buildCandidateFromDetection(userId, merchantKey, group, detection);
     if (!candidate) continue;
     const key = `${candidate.merchant_normalized}:${candidate.cadence}`;
