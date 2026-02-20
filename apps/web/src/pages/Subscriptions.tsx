@@ -5,7 +5,8 @@ import { SubscriptionFilters } from '@/components/subscriptions/SubscriptionFilt
 import { SubscriptionLoadingSkeleton } from '@/components/subscriptions/SubscriptionLoadingSkeleton'
 import { SubscriptionSection } from '@/components/subscriptions/SubscriptionSection'
 import { SubscriptionStats } from '@/components/subscriptions/SubscriptionStats'
-import { useSubscriptions } from '@/hooks/useSubscriptions'
+import { Button } from '@/components/ui/button'
+import { ENABLE_RERUN_DETECTION, useSubscriptions } from '@/hooks/useSubscriptions'
 import { getLoginRedirectPath } from '@/lib/loginRedirect'
 import { useSession } from '@/lib/session'
 
@@ -82,6 +83,19 @@ export default function Subscriptions() {
       {!fetching && (
         <section aria-labelledby="subscriptions-filters-heading">
           <h2 id="subscriptions-filters-heading" className="sr-only">Recurring filters</h2>
+          {ENABLE_RERUN_DETECTION && (
+            <div className="mb-2 flex items-center justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleRerunDetectionClick}
+                disabled={rerunningDetection}
+              >
+                {rerunningDetection ? 'Re-running detection...' : 'Re-run detection'}
+              </Button>
+            </div>
+          )}
           <SubscriptionFilters
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
