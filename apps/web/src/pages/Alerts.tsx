@@ -530,7 +530,7 @@ export default function Alerts() {
             {alerts.length}
           </span>
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">Active alerts sorted by newest first.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Unusual charges, anomalies, and price increases flagged by the system. Dismiss or mark as expected.</p>
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4 shadow-sm">

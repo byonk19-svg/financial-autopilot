@@ -27,7 +27,7 @@ export function RulesHeader({
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Rules</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Start simple: aliases rename merchants, transaction rules force behavior.
+            Manually-run rules: aliases standardize merchant names, behavior rules force category or type. Run analysis to apply them.
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Aliases: {activeAliasCount}/{aliasCount} active • Behavior rules: {activeRuleCount}/{ruleCount} active

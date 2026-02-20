@@ -43,9 +43,8 @@ const navGroups: NavGroup[] = [
     label: 'Config',
     items: [
       { to: '/rules', label: 'Rules' },
-      { to: '/classification-rules', label: 'Class Rules' },
+      { to: '/classification-rules', label: 'Auto-Rules' },
       { to: '/settings', label: 'Settings' },
-      { to: '/connect', label: 'Connect' },
     ],
   },
 ]

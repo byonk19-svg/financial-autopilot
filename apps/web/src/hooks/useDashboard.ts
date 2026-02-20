@@ -65,6 +65,13 @@ export type SystemHealthPayload = {
   jobs: HealthJobRow[]
 }
 
+export type DashboardAttentionCounts = {
+  uncategorizedTransactions: number
+  reviewSubscriptions: number
+  unreadAlerts: number
+  unownedAccounts: number
+}
+
 export type DashboardKpis = {
   incomeMtd: number
   incomeBrianna: number
@@ -144,6 +151,12 @@ export function useDashboard(userId: string | undefined) {
   const [systemHealth, setSystemHealth] = useState<SystemHealthPayload | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
   const [healthError, setHealthError] = useState('')
+  const [attentionCounts, setAttentionCounts] = useState<DashboardAttentionCounts>({
+    uncategorizedTransactions: 0,
+    reviewSubscriptions: 0,
+    unreadAlerts: 0,
+    unownedAccounts: 0,
+  })
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -153,34 +166,62 @@ export function useDashboard(userId: string | undefined) {
   const loadDashboardData = useCallback(async () => {
     if (!userId) return
 
-    const [kpisResult, renewalsResult, anomaliesResult, accountsResult, analysisResult, insightsResult] =
-      await Promise.allSettled([
-        supabase.rpc('dashboard_kpis', {
-          start_date: monthStartDate(),
-          end_date: todayDate(),
-        }),
-        supabase.rpc('upcoming_renewals', {
-          lookahead_days: 14,
-        }),
-        supabase.rpc('anomalies', {
-          max_rows: 5,
-        }),
-        supabase.from('accounts').select('last_synced_at').eq('user_id', userId),
-        supabase
-          .from('user_metrics_daily')
-          .select('updated_at')
-          .eq('user_id', userId)
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from('insights')
-          .select('created_at')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ])
+    const [
+      kpisResult,
+      renewalsResult,
+      anomaliesResult,
+      accountsResult,
+      analysisResult,
+      insightsResult,
+      uncategorizedResult,
+      reviewSubsResult,
+      unreadAlertsResult,
+      unownedAccountsResult,
+    ] = await Promise.allSettled([
+      supabase.rpc('dashboard_kpis', {
+        start_date: monthStartDate(),
+        end_date: todayDate(),
+      }),
+      supabase.rpc('upcoming_renewals', {
+        lookahead_days: 14,
+      }),
+      supabase.rpc('anomalies', {
+        max_rows: 5,
+      }),
+      supabase.from('accounts').select('last_synced_at').eq('user_id', userId),
+      supabase
+        .from('user_metrics_daily')
+        .select('updated_at')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('insights')
+        .select('created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_credit', true)
+        .is('category_id', null)
+        .neq('type', 'transfer'),
+      supabase
+        .from('subscriptions')
+        .select('*', { count: 'exact', head: true })
+        .eq('classification', 'needs_review'),
+      supabase
+        .from('autopilot_alerts')
+        .select('*', { count: 'exact', head: true })
+        .is('dismissed_at', null),
+      supabase
+        .from('accounts')
+        .select('*', { count: 'exact', head: true })
+        .is('owner', null),
+    ])
 
     let loadFailed = false
 
@@ -249,6 +290,25 @@ export function useDashboard(userId: string | undefined) {
         action: 'load-last-weekly-insights-at',
       })
     }
+
+    setAttentionCounts({
+      uncategorizedTransactions:
+        uncategorizedResult.status === 'fulfilled' && !uncategorizedResult.value.error
+          ? (uncategorizedResult.value.count ?? 0)
+          : 0,
+      reviewSubscriptions:
+        reviewSubsResult.status === 'fulfilled' && !reviewSubsResult.value.error
+          ? (reviewSubsResult.value.count ?? 0)
+          : 0,
+      unreadAlerts:
+        unreadAlertsResult.status === 'fulfilled' && !unreadAlertsResult.value.error
+          ? (unreadAlertsResult.value.count ?? 0)
+          : 0,
+      unownedAccounts:
+        unownedAccountsResult.status === 'fulfilled' && !unownedAccountsResult.value.error
+          ? (unownedAccountsResult.value.count ?? 0)
+          : 0,
+    })
 
     if (loadFailed) {
       setError('Some dashboard metrics could not be loaded.')
@@ -411,6 +471,7 @@ export function useDashboard(userId: string | undefined) {
   return {
     checkingConnection,
     needsConnection,
+    attentionCounts,
     kpis,
     upcomingRenewals,
     anomalies,
