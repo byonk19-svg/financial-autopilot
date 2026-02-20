@@ -341,6 +341,97 @@ export function useSubscriptions(userId: string | undefined) {
     [userId],
   )
 
+  const renameMerchant = useCallback(
+    async (subscription: SubscriptionRecord, nextMerchant: string) => {
+      if (!userId) return
+
+      const normalizedTarget = nextMerchant.trim().toUpperCase()
+      if (!normalizedTarget) {
+        setError('Merchant name is required.')
+        return
+      }
+
+      if (normalizedTarget === subscription.merchant_normalized) {
+        return
+      }
+
+      setProcessingId(subscription.id)
+      setError('')
+
+      try {
+        const pattern = subscription.merchant_normalized
+        const { data: existingAlias, error: lookupError } = await supabase
+          .from('merchant_aliases')
+          .select('id')
+          .eq('user_id', userId)
+          .is('account_id', null)
+          .eq('pattern', pattern)
+          .maybeSingle()
+
+        if (lookupError) {
+          throw lookupError
+        }
+
+        if (existingAlias?.id) {
+          const { error: updateError } = await supabase
+            .from('merchant_aliases')
+            .update({
+              normalized: normalizedTarget,
+              is_active: true,
+            })
+            .eq('id', existingAlias.id)
+            .eq('user_id', userId)
+
+          if (updateError) {
+            throw updateError
+          }
+        } else {
+          const { error: insertError } = await supabase.from('merchant_aliases').insert({
+            user_id: userId,
+            pattern,
+            normalized: normalizedTarget,
+            match_type: 'contains',
+            priority: 50,
+            account_id: null,
+            is_active: true,
+          })
+
+          if (insertError) {
+            throw insertError
+          }
+        }
+
+        if (ENABLE_RERUN_DETECTION) {
+          const response = await fetchFunctionWithAuth('analysis-daily', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+          })
+
+          if (!response.ok) {
+            setError('Rename saved, but analysis re-run failed. Use Re-run detection.')
+          }
+        }
+
+        await loadSubscriptions()
+      } catch (renameError) {
+        captureException(renameError, {
+          component: 'useSubscriptions',
+          action: 'rename-merchant',
+          subscription_id: subscription.id,
+          merchant_normalized: subscription.merchant_normalized,
+          next_merchant: normalizedTarget,
+        })
+        setError('Could not save merchant rename.')
+      } finally {
+        setProcessingId('')
+      }
+    },
+    [loadSubscriptions, userId],
+  )
+
   const setClassification = useCallback(async (
     subscription: SubscriptionRecord,
     classification: SubscriptionClassification,
@@ -708,6 +799,7 @@ export function useSubscriptions(userId: string | undefined) {
     undoClassification,
     markFalsePositive,
     updateNotifyDaysBefore,
+    renameMerchant,
     loadSubscriptionHistory,
     rerunDetection,
     loadSubscriptions,

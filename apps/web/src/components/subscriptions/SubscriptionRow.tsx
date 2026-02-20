@@ -43,6 +43,7 @@ export type SubscriptionRowProps = {
   onMarkInactive: () => void | Promise<void>
   onSetClassification?: (next: SubscriptionClassification, createRule: boolean) => void | Promise<void>
   onUpdateNotifyDaysBefore?: (next: number | null) => void | Promise<void>
+  onRenameMerchant?: (nextMerchant: string) => void | Promise<void>
   showClassifyControl?: boolean
   onToggleLock?: () => void | Promise<void>
   onUndoClassification?: () => void | Promise<void>
@@ -77,6 +78,7 @@ export function SubscriptionRow({
   onMarkInactive,
   onSetClassification,
   onUpdateNotifyDaysBefore,
+  onRenameMerchant,
   showClassifyControl = false,
   onToggleLock,
   onUndoClassification,
@@ -329,7 +331,7 @@ export function SubscriptionRow({
               </div>
             </div>
 
-            {(showClassifyControl || onToggleLock || onUndoClassification || onUpdateNotifyDaysBefore) && (
+            {(showClassifyControl || onToggleLock || onUndoClassification || onUpdateNotifyDaysBefore || onRenameMerchant) && (
               <div
                 className={`mt-2 flex flex-wrap items-center gap-2 ${compact ? 'text-[11px]' : 'text-xs'}`}
                 onClick={(event) => event.stopPropagation()}
@@ -400,6 +402,24 @@ export function SubscriptionRow({
                     className={buttonSize}
                   >
                     Undo
+                  </Button>
+                )}
+                {onRenameMerchant && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUpdating}
+                    onClick={() => {
+                      const entered = window.prompt('Rename merchant', merchant)
+                      if (!entered) return
+                      const nextMerchant = entered.trim()
+                      if (!nextMerchant || nextMerchant === merchant) return
+                      void onRenameMerchant(nextMerchant)
+                    }}
+                    className={buttonSize}
+                  >
+                    Rename merchant
                   </Button>
                 )}
               </div>

@@ -45,6 +45,7 @@ type SubscriptionSectionProps = {
     createRule: boolean,
   ) => Promise<void>
   onUpdateNotifyDaysBefore: (subscription: SubscriptionRecord, notifyDaysBefore: number | null) => Promise<void>
+  onRenameMerchant: (subscription: SubscriptionRecord, nextMerchant: string) => Promise<void>
   onToggleClassificationLock: (subscription: SubscriptionRecord) => Promise<void>
   onUndoClassification: (subscription: SubscriptionRecord) => Promise<void>
   onMarkFalsePositive: (subscription: SubscriptionRecord, rerunAfterMark: boolean) => Promise<void>
@@ -66,6 +67,7 @@ export function SubscriptionSection({
   onMarkInactive,
   onSetClassification,
   onUpdateNotifyDaysBefore,
+  onRenameMerchant,
   onToggleClassificationLock,
   onUndoClassification,
   onMarkFalsePositive,
@@ -155,6 +157,7 @@ export function SubscriptionSection({
                   onUpdateNotifyDaysBefore={(notifyDaysBefore) =>
                     onUpdateNotifyDaysBefore(subscription, notifyDaysBefore)
                   }
+                  onRenameMerchant={(nextMerchant) => onRenameMerchant(subscription, nextMerchant)}
                   showClassifyControl={showClassifyControl}
                   onToggleLock={() => onToggleClassificationLock(subscription)}
                   onUndoClassification={() => onUndoClassification(subscription)}
