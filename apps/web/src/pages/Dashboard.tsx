@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DashboardAttentionCard } from "@/components/dashboard/DashboardAttentionCard";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardLoading } from "@/components/dashboard/DashboardLoading";
 import { DashboardStatsGrid } from "@/components/dashboard/DashboardStatsGrid";
@@ -127,6 +128,7 @@ export default function Dashboard() {
   const {
     checkingConnection,
     needsConnection,
+    attentionCounts,
     kpis,
     anomalies,
     upcomingRenewals,
@@ -252,40 +254,14 @@ export default function Dashboard() {
         onReconnect={handleReconnect}
       />
 
+      <DashboardAttentionCard counts={attentionCounts} />
+
       <DashboardStatsGrid
         kpis={kpis}
         anomalies={anomalies}
         upcomingRenewals={upcomingRenewals}
         renewalMonthlyTotal={renewalMonthlyTotal}
       />
-
-      <section
-        className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]"
-        aria-labelledby="dashboard-content-heading"
-      >
-        <h2 id="dashboard-content-heading" className="sr-only">
-          Dashboard content
-        </h2>
-        <section aria-labelledby="insight-feed-heading">
-          <h3 id="insight-feed-heading" className="sr-only">
-            Insight feed
-          </h3>
-          <div aria-live="polite">
-            <InsightFeed userId={session.user.id} />
-          </div>
-        </section>
-
-        <aside className="space-y-4" aria-label="Dashboard sidebar">
-          <DashboardSystemHealthCard
-            healthLoading={healthLoading}
-            healthError={healthError}
-            systemHealth={systemHealth}
-            lastAccountSyncAt={lastAccountSyncAt}
-            lastAnalysisAt={lastAnalysisAt}
-            lastWeeklyInsightsAt={lastWeeklyInsightsAt}
-          />
-        </aside>
-      </section>
 
       <section
         className="grid gap-6 md:grid-cols-2"
@@ -496,6 +472,34 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+      </section>
+
+      <section
+        className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]"
+        aria-labelledby="dashboard-content-heading"
+      >
+        <h2 id="dashboard-content-heading" className="sr-only">
+          Dashboard content
+        </h2>
+        <section aria-labelledby="insight-feed-heading">
+          <h3 id="insight-feed-heading" className="sr-only">
+            Insight feed
+          </h3>
+          <div aria-live="polite">
+            <InsightFeed userId={session.user.id} />
+          </div>
+        </section>
+
+        <aside className="space-y-4" aria-label="Dashboard sidebar">
+          <DashboardSystemHealthCard
+            healthLoading={healthLoading}
+            healthError={healthError}
+            systemHealth={systemHealth}
+            lastAccountSyncAt={lastAccountSyncAt}
+            lastAnalysisAt={lastAnalysisAt}
+            lastWeeklyInsightsAt={lastWeeklyInsightsAt}
+          />
+        </aside>
       </section>
     </section>
   );
