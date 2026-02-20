@@ -50,6 +50,7 @@ type SubscriptionSectionProps = {
   onMarkFalsePositive: (subscription: SubscriptionRecord, rerunAfterMark: boolean) => Promise<void>
   onLoadHistory: (subscriptionId: string) => Promise<void>
   historyBySubscriptionId: Record<string, SubscriptionHistoryRow[]>
+  dailyTotalsBySubscriptionId: Record<string, Record<string, number>>
   historyLoadingIds: Record<string, boolean>
   showClassifyControl?: boolean
   density: DensityMode
@@ -70,6 +71,7 @@ export function SubscriptionSection({
   onMarkFalsePositive,
   onLoadHistory,
   historyBySubscriptionId,
+  dailyTotalsBySubscriptionId,
   historyLoadingIds,
   showClassifyControl = false,
   density,
@@ -134,6 +136,7 @@ export function SubscriptionSection({
                   isUpdating={processingId === subscription.id}
                   onMarkInactive={() => onMarkInactive(subscription)}
                   historyRows={historyBySubscriptionId[subscription.id] ?? []}
+                  dailyTotals={dailyTotalsBySubscriptionId[subscription.id] ?? {}}
                   historyLoading={historyLoadingIds[subscription.id] === true}
                   onExpandChange={(expanded) => {
                     if (expanded) {
