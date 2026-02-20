@@ -3,3 +3,6 @@ dist
 .env*
 .DS_Store
 !apps/web/.env.example
+.claude/
+dev-err.log
+dev-out.log

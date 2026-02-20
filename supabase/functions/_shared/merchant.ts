@@ -98,6 +98,7 @@ function aliasMerchant(value: string): string {
   if (value.includes("ITUNES")) return "APPLE";
   if (value.includes("NETFLIX")) return "NETFLIX";
   if (value.includes("SPOTIFY")) return "SPOTIFY";
+  if (/\b(COMCAST|XFINITY)\b/.test(value)) return "COMCAST";
   if (value.includes("AMZN") || value.includes("AMAZON MARKETPLACE") || value.includes("AMAZON")) return "AMAZON";
   if (/\bGOOGLE\b.*\bSERVICES?\b/.test(value)) return "GOOGLE";
   return value;

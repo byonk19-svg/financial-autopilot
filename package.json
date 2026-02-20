@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "npm run test:unit",
-    "test:unit": "vitest run supabase/functions/_shared/rules_v1.test.ts supabase/functions/_shared/recurring_v1.test.ts"
+    "test:unit": "vitest run supabase/functions/_shared/rules_v1.test.ts supabase/functions/_shared/recurring_v1.test.ts supabase/functions/_shared/merchant.test.ts"
   },
   "keywords": [],
   "author": "",
