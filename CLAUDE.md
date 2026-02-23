@@ -3,40 +3,59 @@
 ## Project Snapshot
 
 Financial Autopilot is a full-stack personal finance app:
-- Frontend: React + TypeScript (Vite)
+- Frontend: React 18 + TypeScript (Vite 7)
 - Backend: Supabase Postgres + Edge Functions (Deno)
 - Bank sync: SimpleFIN
 
-The app is live with real data and currently focused on clean, accurate household finance workflows.
+The app is live with real data and currently focused on clean, accurate household finance workflows for a two-person household (Brianna + Elaine).
 
 ## Repository Layout
 
 ```txt
 financial-autopilot/
-|- apps/web/                  # React SPA
-|  |- src/pages/              # route-level pages
-|  |- src/components/         # shared UI + shadcn primitives
-|  |- src/hooks/              # page/feature hooks
-|  |- src/lib/                # utilities, clients, formatters
+|- apps/web/                      # React SPA (Vite monorepo workspace)
+|  |- src/
+|     |- pages/                   # Route-level page components (14 pages)
+|     |- components/              # Feature components + shadcn/ui primitives
+|        |- ui/                   # shadcn primitives (button, card, badge, etc.)
+|        |- cash-flow/            # Cash flow feature components
+|        |- dashboard/            # Dashboard feature components
+|        |- rules/                # Manual rules feature components
+|        |- classification-rules/ # Auto-categorization rule components
+|        |- subscriptions/        # Subscription feature components
+|        |- shift-log/            # Shift log feature components
+|        |- transactions/         # Transaction filter components
+|     |- hooks/                   # Page/feature-level custom hooks (8 hooks)
+|     |- lib/                     # Utilities, clients, formatters (14 modules)
 |- supabase/
-|  |- migrations/             # SQL migrations
-|  |- functions/              # Edge Functions
-|     |- _shared/             # shared Deno utilities
-|     |- simplefin-sync/
-|     |- simplefin-connect/
-|     |- analysis-daily/
-|     |- generate-weekly-insights/
-|     |- recurring/
-|     |- system-health/
+|  |- migrations/                 # SQL migrations (0001–0051, never edit old ones)
+|  |- functions/                  # Edge Functions (Deno)
+|     |- _shared/                 # Shared Deno utilities
+|     |- simplefin-sync/          # Bank account + transaction sync
+|     |- simplefin-connect/       # SimpleFIN OAuth token exchange
+|     |- analysis-daily/          # Daily KPI + anomaly + alert analysis
+|     |- generate-weekly-insights/ # Weekly spending pattern insights
+|     |- recurring/               # Subscription/recurring detection
+|     |- subscription-renewal-alerts/ # Cron: upcoming renewal alerts
+|     |- system-health/           # Cron job health check
+|     |- purge-old-data/          # Cron: delete old transactions (4+ yr)
+|     |- redact-descriptions/     # Cron: redact old transaction descriptions
+|     |- weekly-insights/         # Legacy weekly insights (deprecated)
+|     |- hello/                   # Ping/test function
 ```
 
 ## Stack
 
-- React 18 + TypeScript + Vite
-- Tailwind + shadcn/ui + Radix
-- Supabase JS client (auth + PostgREST + RPC)
+- React 18.2 + TypeScript 5.9 + Vite 7.3
+- Tailwind 3.4 + shadcn/ui + Radix UI + CVA
+- Supabase JS 2.95 (auth + PostgREST + RPC)
 - Supabase Postgres with RLS
 - Supabase Edge Functions (Deno)
+- React Router v6
+- Recharts (charts), date-fns 4, Lucide React (icons)
+- Zod 4 (validation), Sentry 10 (error reporting)
+- Prettier + prettier-plugin-tailwindcss
+- Vitest 3 (unit tests for shared edge function logic)
 
 ## Core Commands
 
@@ -64,7 +83,7 @@ Frontend (`apps/web/.env`):
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_FUNCTIONS_URL`
 - `VITE_ENABLE_RERUN_DETECTION=true` (required for rerun detection button)
-- `VITE_SENTRY_DSN` (optional, if Sentry is enabled)
+- `VITE_SENTRY_DSN` (optional)
 
 Edge function secrets:
 - `SUPABASE_URL`
@@ -86,43 +105,145 @@ This is a credit-card-first household.
 
 `accounts`:
 - `type` (from provider)
-- `owner` (`brianna | elaine | household`) - user-managed
-- `is_credit` - DB-derived
+- `owner` (`brianna | elaine | household`) — user-managed, never overwritten by sync
+- `is_credit` — DB-derived from account type
 
 `transactions`:
-- `owner` (inherited from account by trigger, with guard)
-- `is_credit` (derived/denormalized from account)
+- `owner` — inherited from account by DB trigger (with guard, never overwritten)
+- `is_credit` — denormalized from account
 - `type` (`income | expense | transfer | savings`)
+- `category` — user/rule assigned
+- `merchant_canonical` — normalized merchant name
 
-## Rule Engines (Both Exist)
+`subscriptions` (recurring detection output):
+- `cadence` (`weekly | monthly | quarterly | yearly | unknown`)
+- `classification` (`needs_review | subscription | bill_loan | transfer | ignore`)
+- `confidence` — detection confidence score
 
-1. `transaction_rules` (older/manual UI flow)
-2. `transaction_category_rules_v1` (sync-time auto-categorization)
+## Rule Engines (Both Exist — Do Not Conflate)
+
+1. `transaction_rules` — older, manual UI flow (alias rules + behavior rules)
+2. `transaction_category_rules_v1` — sync-time auto-categorization (newer)
 
 For ingestion-time automation, prefer `transaction_category_rules_v1`.
 
-## Migrations to Keep Mentally Aligned
+## Key Database Migrations to Keep Mentally Aligned
 
-- `0043`: account owner + transaction owner inheritance trigger
-- `0044`: owner/type-aware `dashboard_kpis` + `shift_week_summary`
-- `0045`: savings buckets + contributions + `savings_bucket_summary`
-- `0047`: `is_credit` derivation and credit-aware KPI logic
-- `0048`: inferred opening balance RPC for cash flow
-- `0049`: optional account-owner inference by institution pattern
-- `0050`: account owner assignment RPC + UI flow
+| Migration | Description |
+|-----------|-------------|
+| `0039` | `shift_log`: employers, locations, shifts |
+| `0040` | `cash_flow`: bill templates, projected income, month balances |
+| `0041` | `transaction_category_rules_v1`: sync-time auto-categorization |
+| `0042` | transactions: type, category, owner columns |
+| `0043` | `accounts.owner` + transaction owner inheritance trigger |
+| `0044` | Owner/type-aware `dashboard_kpis` + `shift_week_summary` |
+| `0045` | Savings buckets + contributions + `savings_bucket_summary` |
+| `0046` | Seed default user categories |
+| `0047` | `is_credit` derivation and credit-aware KPI logic |
+| `0048` | Inferred opening balance RPC for cash flow |
+| `0049` | Optional account-owner inference by institution pattern |
+| `0050` | Account owner assignment RPC + UI flow |
+| `0051` | Comcast/Xfinity canonical merchant name fix |
 
 ## Non-Negotiable Behavior
 
 - `accounts.owner` is user-managed and must not be overwritten by sync.
-- Sync should avoid writing user-managed/DB-derived fields when possible.
-- Keep trigger-owned logic in DB (owner inheritance, is_credit derivation).
+- Sync should avoid writing user-managed/DB-derived fields (`owner`, `is_credit`).
+- Owner inheritance and `is_credit` derivation live in DB triggers — do not replicate in app code.
+- New schema change = new migration file, never rewrite old migrations.
+
+## Pages (apps/web/src/pages/)
+
+| Page | Route | Purpose |
+|------|-------|---------|
+| `Dashboard.tsx` | `/` | KPIs, insights, shift summary, system health |
+| `Overview.tsx` | `/overview` | Account groups, bank sync status |
+| `Transactions.tsx` | `/transactions` | List with filter chips, bulk categorization (50/page) |
+| `CashFlow.tsx` | `/cash-flow` | Monthly ledger with bill templates + projected income |
+| `ShiftLog.tsx` | `/shift-log` | Hourly wage tracking with weekly goals + employer comparison |
+| `Subscriptions.tsx` | `/subscriptions` | Recurring charge detection + classification |
+| `Alerts.tsx` | `/alerts` | Alert triage (unusual, duplicate, pace, renewal, spike) |
+| `Rules.tsx` | `/rules` | Manual alias + behavior rules |
+| `ClassificationRules.tsx` | `/classification-rules` | Sync-time auto-categorization rules (v1 engine) |
+| `Settings.tsx` | `/settings` | User data purge |
+| `Connect.tsx` | `/connect` | SimpleFIN bank connection setup |
+| `Login.tsx` | `/login` | Supabase auth |
+| `Home.tsx` | `/home` | Marketing/landing |
+| `Feed.tsx` | — | Deprecated activity feed |
+
+## Hooks (apps/web/src/hooks/)
+
+| Hook | Purpose |
+|------|---------|
+| `useDashboard.ts` | KPIs, renewals, anomalies, system health, account sync status |
+| `useSubscriptions.ts` | Subscription detection, filtering, classification management |
+| `useCashFlow.ts` | Month balance, bill templates, projected income, ledger, thresholds |
+| `useShiftLog.ts` | Shift CRUD, employer/location management, weekly goal tracking |
+| `useRules.ts` | Alias + behavior rule CRUD with form state |
+| `useClassificationRules.ts` | Auto-categorization rule CRUD and toggle |
+| `useTransactionFilterChips.ts` | Filter UI state (owner, type, category, date range) |
+| `useTransactionSelection.ts` | Multi-select transaction state for bulk operations |
+
+## Lib Utilities (apps/web/src/lib/)
+
+| Module | Purpose |
+|--------|---------|
+| `types.ts` | All shared TypeScript interfaces |
+| `supabase.ts` | Supabase client initialization |
+| `session.ts` | `useSession()` hook for auth state |
+| `auth.ts` | `getAccessToken()` with refresh logic |
+| `formatting.ts` | `formatCurrency`, `formatShortDate`, `formatShortDateTime` |
+| `subscriptionFormatters.ts` | Cadence labels, price increase display, monthly equivalents |
+| `functions.ts` | `functionUrl()` helper for edge function endpoints |
+| `fetchWithAuth.ts` | HTTP client with Bearer token + auto-refresh retry |
+| `errorReporting.ts` | `captureException()` / `captureMessage()` via Sentry |
+| `bankConnections.ts` | `hasActiveSimplefinConnection()` check |
+| `cashFlowLedger.ts` | `buildMonthLedger()`, `findUpcomingLowPoints()`, `getBillsForMonth()` |
+| `shiftWeeks.ts` | Week calculation and shift summary logic |
+| `loginRedirect.ts` | Auth redirect path logic |
+| `utils.ts` | `cn()` (tailwind-merge + clsx) |
+
+## Edge Functions (supabase/functions/)
+
+| Function | Trigger | Purpose |
+|----------|---------|---------|
+| `simplefin-sync` | Manual/cron | Fetches accounts + transactions from SimpleFIN, applies rules v1 |
+| `simplefin-connect` | Manual | OAuth token exchange + encrypted storage |
+| `analysis-daily` | Cron | KPIs, anomaly detection, alerts, subscription renewals |
+| `generate-weekly-insights` | Cron | Spending pattern insights (opportunities, warnings, projections) |
+| `recurring` | Manual/cron | Groups transactions by merchant, calculates cadence + confidence |
+| `subscription-renewal-alerts` | Cron | Generates upcoming renewal alerts |
+| `system-health` | Manual | Returns cron job health status |
+| `purge-old-data` | Cron | Deletes transactions older than 4 years |
+| `redact-descriptions` | Cron | Redacts old transaction descriptions after retention period |
+| `weekly-insights` | — | Legacy, likely deprecated |
+| `hello` | Manual | Ping/test |
+
+### Shared Edge Function Utilities (`_shared/`)
+
+| Module | Purpose |
+|--------|---------|
+| `rules_v1.ts` | Category rule matching (merchant_contains, merchant_exact, amount ranges) |
+| `recurring_v1.ts` | V1 subscription detection algorithm |
+| `merchant.ts` | Merchant normalization and canonicalization |
+| `simplefin.ts` | SimpleFIN API client (`fetchAccounts`, `exchangeSetupToken`) |
+| `crypto.ts` | Encrypt/decrypt SimpleFIN tokens (AES-GCM) |
+| `hash.ts` | SHA-256 hashing for transaction fingerprints |
+| `cors.ts` | CORS headers builder (uses `ALLOWED_ORIGINS` env) |
+| `env.ts` | Environment variable getters with validation |
+| `recurring.ts` | Older recurring detection (see `recurring_v1.ts`) |
+
+Tests exist for: `rules_v1`, `recurring_v1`, `merchant` (via Vitest).
 
 ## Frontend Conventions
 
-- Thin page components, logic in hooks/components
-- Reuse shared helpers from `src/lib` (formatters/auth/error reporting)
-- Use shadcn/ui primitives in `src/components/ui`
-- Capture errors with `captureException(...)` (do not silently fail)
+- **Thin pages**: route-level pages hold minimal logic, delegate to hooks and components
+- **Hooks own data fetching**: all Supabase queries live in hooks, not pages
+- **Shared lib first**: use `src/lib` formatters, auth, and error reporting — don't reimplement
+- **shadcn primitives**: always use components from `src/components/ui/` for consistent styling
+- **Error reporting**: call `captureException(...)` on caught errors — never silently fail
+- **Auth pattern**: `getAccessToken()` for edge function calls; `supabase.auth` for PostgREST
+- **No test utilities in prod**: Vitest tests only exist for shared Deno utilities, not the React app
 
 ## Backend Conventions
 
@@ -130,7 +251,37 @@ For ingestion-time automation, prefer `transaction_category_rules_v1`.
 - RLS on all user-scoped tables
 - Indexes for primary `WHERE` and `JOIN` paths
 - Prefer SQL RPC for heavy aggregates/bulk updates
-- Cron functions must validate `CRON_SECRET`
+- Cron functions must validate `CRON_SECRET` before executing
+- Edge functions that accept fetch requests must handle CORS using `_shared/cors.ts`
+- Merchant normalization must stay consistent between DB (SQL) and edge function (`_shared/merchant.ts`)
+
+## Key TypeScript Types (src/lib/types.ts)
+
+```ts
+AccountOption, CategoryOption,
+TransactionRow,                     // Full transaction with category, type, owner
+InsightType, Insight,               // weekly insight variants
+SubscriptionCadence,                // weekly | monthly | quarterly | yearly | unknown
+SubscriptionClassification,         // needs_review | subscription | bill_loan | transfer | ignore
+SubscriptionRecord,                 // Recurring charge with confidence + next date
+EmployerRecord, ShiftRecord,        // Shift log domain types
+ShiftWeek, ShiftWeekSummary,        // Weekly shift aggregation
+CashFlowTransaction,                // Simplified transaction for ledger
+CashFlowBillTemplate,               // Recurring bill/expense projection
+CashFlowProjectedIncome,            // Expected paycheck
+CashFlowLedgerEntry, CashFlowLedgerDay, // Ledger aggregation
+MonthBalanceRecord                  // Month opening balance + threshold
+```
+
+## Navigation Structure
+
+Nav is grouped in the sticky header (`App.tsx`):
+
+- **Main**: Dashboard, Overview, Transactions, Cash Flow, Shift Log
+- **Automation**: Subscriptions, Alerts
+- **Config**: Rules, Auto-Rules (ClassificationRules), Settings
+
+Unauthenticated users are redirected to `/login`. Auth state managed via `useSession()`.
 
 ## Current Priorities
 
@@ -141,7 +292,8 @@ For ingestion-time automation, prefer `transaction_category_rules_v1`.
 
 ## User Setup Assumptions
 
-- Two-person household model: Brianna + Elaine (+ Household shared context)
+- Two-person household: Brianna + Elaine (+ Household shared context)
+- `owner` values: `brianna | elaine | household`
 - Most spending is on credit cards
 - Paychecks land in checking accounts
 - Goal is a clean, obvious, and accurate workflow with minimal manual maintenance
