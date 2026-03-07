@@ -157,4 +157,157 @@ test.describe('authenticated sync -> analysis -> recurring flow', () => {
     await expect(page.getByRole('heading', { name: 'Netflix - Wayfair' })).toBeVisible()
     await expect(page.locator('h3', { hasText: 'Netflix - ' })).toHaveCount(3)
   })
+
+  test('friendly search matches split recurring merchant labels', async ({ page }) => {
+    await ensureSignedIn(page)
+
+    await page.route('**/functions/v1/recurring', async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue()
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          grouped: {
+            subscription: [
+              {
+                id: 'mock-nfx-chase',
+                merchant_normalized: 'NFX CHASE',
+                cadence: 'monthly',
+                classification: 'subscription',
+                is_false_positive: false,
+                user_locked: true,
+                notify_days_before: 3,
+                last_amount: 27.05,
+                prev_amount: 27.05,
+                next_expected_at: '2026-04-11',
+                confidence: 0.98,
+                is_active: true,
+                primary_payer: 'brianna',
+              },
+              {
+                id: 'mock-nfx-citi',
+                merchant_normalized: 'NFX CITI',
+                cadence: 'monthly',
+                classification: 'subscription',
+                is_false_positive: false,
+                user_locked: true,
+                notify_days_before: 3,
+                last_amount: 19.47,
+                prev_amount: 19.47,
+                next_expected_at: '2026-04-12',
+                confidence: 0.97,
+                is_active: true,
+                primary_payer: 'household',
+              },
+            ],
+            bill_loan: [],
+            needs_review: [],
+            transfer: [],
+            ignore: [],
+          },
+        }),
+      })
+    })
+
+    await page.goto('/subscriptions')
+    await expect(page.getByRole('heading', { name: 'Netflix - Chase' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Netflix - Citi' })).toBeVisible()
+
+    await page.getByLabel('Search recurring merchants').fill('Netflix - Citi')
+
+    await expect(page.getByRole('heading', { name: 'Netflix - Citi' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Netflix - Chase' })).toHaveCount(0)
+  })
+
+  test('no-match state explains filters and recovers with clear filters', async ({ page }) => {
+    await ensureSignedIn(page)
+
+    await page.route('**/functions/v1/recurring', async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue()
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          grouped: {
+            subscription: [
+              {
+                id: 'mock-hulu',
+                merchant_normalized: 'HULU',
+                cadence: 'monthly',
+                classification: 'subscription',
+                is_false_positive: false,
+                user_locked: true,
+                notify_days_before: 3,
+                last_amount: 14.99,
+                prev_amount: 14.99,
+                next_expected_at: '2026-04-09',
+                confidence: 0.99,
+                is_active: true,
+                primary_payer: 'household',
+              },
+            ],
+            bill_loan: [],
+            needs_review: [],
+            transfer: [],
+            ignore: [],
+          },
+        }),
+      })
+    })
+
+    await page.goto('/subscriptions')
+    await expect(page.getByRole('heading', { name: 'Hulu' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Price increase only' }).click()
+
+    await expect(page.getByText('No matches')).toBeVisible()
+    await expect(
+      page.getByText('No recurring charges match your current search and filters.'),
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: 'Clear filters' }).click()
+    await expect(page.getByRole('heading', { name: 'Hulu' })).toBeVisible()
+  })
+
+  test('rules run button reflects in-flight analysis state', async ({ page }) => {
+    await ensureSignedIn(page)
+
+    await page.route('**/functions/v1/analysis-daily', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue()
+        return
+      }
+
+      await page.waitForTimeout(450)
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          request_id: 'mock-analysis-request-id',
+          users_processed: 1,
+          subscriptions_upserted: 5,
+          alerts_inserted: 0,
+        }),
+      })
+    })
+
+    await page.goto('/rules')
+    const runButton = page.getByRole('button', { name: 'Run analysis now' })
+    await runButton.click()
+
+    await expect(page.getByRole('button', { name: 'Running...' })).toBeDisabled()
+    await expect(page.getByText('Analysis run completed.')).toBeVisible()
+    await expect(page.getByText('Request ID: mock-analysis-request-id')).toBeVisible()
+  })
 })

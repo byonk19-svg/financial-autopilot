@@ -10,6 +10,7 @@ Current coverage in `test:e2e`:
 - Login page shell renders
 - Unauthenticated redirects for Transactions and Recurring
 - Authenticated flow spec is included but auto-skips without auth setup
+- Edge-case matrix: `tests/e2e/EDGE_CASE_MATRIX.md`
 
 ## Authenticated flow (real app actions)
 
@@ -20,6 +21,9 @@ This suite covers:
 - `Recurring` page load check
 - `Transactions` pending filter default behavior (`is_pending=eq.false` by default)
 - Split recurring merchants render as separate rows (mocked recurring payload)
+- Friendly split label search (`Netflix - Citi`) behavior
+- No-match filter state and clear-filter recovery
+- In-flight analysis action state (`Running...` disabled) and completion status
 
 ### Option A: credentials
 
