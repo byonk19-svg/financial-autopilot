@@ -47,7 +47,7 @@ export function DashboardSystemHealthCard({
   lastWeeklyInsightsAt,
 }: DashboardSystemHealthCardProps) {
   return (
-    <Card aria-labelledby="system-health-heading">
+    <Card aria-labelledby="system-health-heading" className="border border-border/80 bg-card/95">
       <section>
         <CardHeader className="pb-3">
           <CardTitle
@@ -94,7 +94,7 @@ export function DashboardSystemHealthCard({
                 </div>
               </dl>
 
-              <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="rounded-xl border border-border bg-muted/25 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Latest Error
                 </p>
@@ -103,7 +103,7 @@ export function DashboardSystemHealthCard({
                 </p>
               </div>
 
-              <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+              <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <ActivityIcon className="h-3.5 w-3.5 text-primary/75" />
@@ -119,7 +119,7 @@ export function DashboardSystemHealthCard({
                     {systemHealth.jobs.map((job) => (
                       <div
                         key={job.job_name}
-                        className="space-y-1.5 rounded-md border border-border bg-card px-2.5 py-2"
+                        className="space-y-1.5 rounded-lg border border-border bg-card px-2.5 py-2"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-sm font-medium text-foreground">

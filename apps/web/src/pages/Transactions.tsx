@@ -1435,7 +1435,7 @@ export default function Transactions() {
   )
 
   return (
-    <main className="space-y-4" aria-busy={fetching} data-testid="transactions-page">
+    <main className="mx-auto w-full max-w-7xl space-y-5 lg:space-y-6" aria-busy={fetching} data-testid="transactions-page">
       <section aria-labelledby="transactions-heading" className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 id="transactions-heading" className="text-2xl font-semibold text-foreground">
           Transactions

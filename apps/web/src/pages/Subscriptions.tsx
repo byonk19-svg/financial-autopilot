@@ -71,7 +71,7 @@ export default function Subscriptions() {
 
   return (
     <main
-      className="mx-auto w-full max-w-6xl space-y-4 overflow-x-hidden"
+      className="mx-auto w-full max-w-7xl space-y-5 overflow-x-hidden lg:space-y-6"
       aria-busy={fetching || rerunningDetection}
       data-testid="subscriptions-page"
     >

@@ -40,12 +40,15 @@ export function DashboardStatsGrid({
   anomalies,
   renewalMonthlyTotal,
 }: DashboardStatsGridProps) {
+  const kpiCardClass =
+    "border border-border/80 bg-card/95 shadow-[0_14px_34px_-26px_hsl(var(--foreground)/0.45)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-24px_hsl(var(--foreground)/0.5)]"
+
   return (
     <section
       className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
       aria-label="Dashboard KPI cards"
     >
-      <Card className="transition-shadow duration-150 hover:shadow-md">
+      <Card className={kpiCardClass}>
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -79,7 +82,7 @@ export function DashboardStatsGrid({
         </CardContent>
       </Card>
 
-      <Card className="transition-shadow duration-150 hover:shadow-md">
+      <Card className={kpiCardClass}>
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -102,7 +105,7 @@ export function DashboardStatsGrid({
         </CardContent>
       </Card>
 
-      <Card className="transition-shadow duration-150 hover:shadow-md">
+      <Card className={kpiCardClass}>
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -134,7 +137,7 @@ export function DashboardStatsGrid({
         </CardContent>
       </Card>
 
-      <Card className="transition-shadow duration-150 hover:shadow-md">
+      <Card className={kpiCardClass}>
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -174,7 +177,7 @@ export function DashboardStatsGrid({
         </CardContent>
       </Card>
 
-      <Card className="transition-shadow duration-150 hover:shadow-md md:col-span-2 xl:col-span-2">
+      <Card className={`${kpiCardClass} md:col-span-2 xl:col-span-2`}>
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">

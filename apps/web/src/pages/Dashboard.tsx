@@ -242,7 +242,7 @@ export default function Dashboard() {
 
   return (
     <section
-      className="mx-auto w-full max-w-7xl space-y-6"
+      className="mx-auto w-full max-w-7xl space-y-6 lg:space-y-7"
       aria-busy={syncing || healthLoading}
     >
       <DashboardHeader
