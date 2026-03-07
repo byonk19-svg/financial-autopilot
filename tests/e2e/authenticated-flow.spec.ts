@@ -51,10 +51,7 @@ test.describe('authenticated sync -> analysis -> recurring flow', () => {
   test('transactions hide pending by default and remove filter when toggled on', async ({ page }) => {
     await ensureSignedIn(page)
 
-    await page.goto('/transactions')
-    await expect(page.getByTestId('transactions-page')).toBeVisible()
-
-    await page.waitForRequest(
+    const initialTransactionsRequest = page.waitForRequest(
       (request) =>
         request.method() === 'GET' &&
         request.url().includes('/rest/v1/transactions') &&
@@ -62,17 +59,23 @@ test.describe('authenticated sync -> analysis -> recurring flow', () => {
       { timeout: 20_000 },
     )
 
+    await page.goto('/transactions')
+    await expect(page.getByTestId('transactions-page')).toBeVisible()
+    await initialTransactionsRequest
+
     const showPendingToggle = page.getByLabel('Show pending')
     await expect(showPendingToggle).not.toBeChecked()
-    await showPendingToggle.check()
 
-    await page.waitForRequest(
-      (request) =>
-        request.method() === 'GET' &&
-        request.url().includes('/rest/v1/transactions') &&
-        !request.url().includes('is_pending=eq.false'),
-      { timeout: 20_000 },
-    )
+    await Promise.all([
+      page.waitForRequest(
+        (request) =>
+          request.method() === 'GET' &&
+          request.url().includes('/rest/v1/transactions') &&
+          !request.url().includes('is_pending=eq.false'),
+        { timeout: 20_000 },
+      ),
+      showPendingToggle.check(),
+    ])
   })
 
   test('split recurring merchants render as separate rows', async ({ page }) => {
