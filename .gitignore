@@ -6,3 +6,6 @@ dist
 .claude/
 dev-err.log
 dev-out.log
+.auth/
+test-results/
+playwright-report/

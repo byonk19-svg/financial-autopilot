@@ -4,8 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "npm run dev --workspace web -- --host 127.0.0.1 --port 5174",
     "test": "npm run test:unit",
-    "test:unit": "vitest run supabase/functions/_shared/rules_v1.test.ts supabase/functions/_shared/recurring_v1.test.ts supabase/functions/_shared/merchant.test.ts"
+    "test:unit": "vitest run supabase/functions/_shared/rules_v1.test.ts supabase/functions/_shared/recurring_v1.test.ts supabase/functions/_shared/merchant.test.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:auth": "playwright test tests/e2e/authenticated-flow.spec.ts",
+    "test:e2e:auth:setup": "node tests/e2e/create-auth-state.mjs"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +21,8 @@
     "react-dom": "18.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "supabase": "^2.77.0",
     "vitest": "^3.2.4"
   },
   "overrides": {
