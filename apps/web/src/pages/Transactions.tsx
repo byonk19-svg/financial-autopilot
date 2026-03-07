@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,12 +16,52 @@ import { useTransactionFilterChips } from '@/hooks/useTransactionFilterChips'
 import { useTransactionSelection } from '@/hooks/useTransactionSelection'
 import type { AccountOption, CategoryOption, TransactionRow } from '@/lib/types'
 import { captureException } from '../lib/errorReporting'
+import { fetchFunctionWithAuth } from '../lib/fetchWithAuth'
 import { getLoginRedirectPath } from '../lib/loginRedirect'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 
 const PAGE_SIZE = 50
 const UNCATEGORIZED_VALUE = '__uncategorized__'
+
+// Maps spending category names to recurring pattern classifications.
+// Used when "Fix everywhere" creates a transaction_rule so the Recurring page
+// automatically picks up the correct classification.
+const CATEGORY_TO_RECURRING_CLASSIFICATION: Record<string, 'subscription' | 'bill_loan' | 'transfer'> = {
+  'Streaming & Apps': 'subscription',
+  'Utilities & Internet': 'bill_loan',
+  'Phone': 'bill_loan',
+  'Mortgage & Housing': 'bill_loan',
+  'Insurance': 'bill_loan',
+  'Loan Payment': 'bill_loan',
+  'Childcare & School': 'bill_loan',
+  'Healthcare': 'bill_loan',
+  'Credit Card Payment': 'transfer',
+  'Savings Transfer': 'transfer',
+  'Investing': 'transfer',
+}
+
+function inferRecurringClassificationFromCategory(categoryName: string): 'subscription' | 'bill_loan' | 'transfer' | null {
+  const exact = CATEGORY_TO_RECURRING_CLASSIFICATION[categoryName]
+  if (exact) return exact
+
+  const normalized = categoryName.trim().toLowerCase()
+  if (!normalized) return null
+
+  if (/(subscription|stream|app|membership|software|saas|media)/.test(normalized)) {
+    return 'subscription'
+  }
+
+  if (/(utilit|internet|phone|mobile|mortgage|housing|insurance|loan|bill|childcare|school|health|medical)/.test(normalized)) {
+    return 'bill_loan'
+  }
+
+  if (/(transfer|saving|invest|credit card payment|cc payment|autopay)/.test(normalized)) {
+    return 'transfer'
+  }
+
+  return null
+}
 const FALLBACK_CATEGORY_NAMES = [
   'Payroll - Brianna',
   'Payroll - Elaine',
@@ -75,7 +115,7 @@ type CreateRuleFormState = {
   categoryId: string
   applyScope: RuleApplyScope
 }
-type CategoryFollowUpAction = 'apply_similar' | 'create_rule' | null
+type CategoryFollowUpAction = 'apply_similar' | 'apply_and_rule' | null
 type CategoryFollowUpPromptState = {
   transactionId: string
   merchantCanonical: string
@@ -114,9 +154,15 @@ function toStartOfDayIso(value: string): string {
 }
 
 function buildSearchAndCategoryOrFilter(categoryId: string, searchQuery: string): string | null {
-  const categoryPredicates = categoryId
-    ? [`user_category_id.eq.${categoryId}`, `and(user_category_id.is.null,category_id.eq.${categoryId})`]
-    : []
+  let categoryPredicates: string[]
+  if (categoryId === UNCATEGORIZED_VALUE) {
+    categoryPredicates = ['and(user_category_id.is.null,category_id.is.null)']
+  } else if (categoryId) {
+    categoryPredicates = [`user_category_id.eq.${categoryId}`, `and(user_category_id.is.null,category_id.eq.${categoryId})`]
+  } else {
+    categoryPredicates = []
+  }
+
   const searchPredicates = searchQuery
     ? [
         `merchant_normalized.ilike.%${searchQuery}%`,
@@ -185,6 +231,7 @@ function isSplitTotalValid(total: number, amount: number): boolean {
 
 export default function Transactions() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { session, loading } = useSession()
 
   const [accounts, setAccounts] = useState<AccountOption[]>([])
@@ -192,7 +239,7 @@ export default function Transactions() {
   const [transactions, setTransactions] = useState<TransactionRow[]>([])
   const [categoryUpdatingIds, setCategoryUpdatingIds] = useState<Set<string>>(new Set())
   const [bulkUpdating, setBulkUpdating] = useState(false)
-  const [toast, setToast] = useState<{ id: number; message: string; tone: 'error' | 'info' } | null>(null)
+  const [toast, setToast] = useState<{ id: number; message: string; tone: 'error' | 'info'; link?: { href: string; label: string } } | null>(null)
   const [categoryFollowUpPrompt, setCategoryFollowUpPrompt] = useState<CategoryFollowUpPromptState | null>(null)
   const [expandedTransactionIds, setExpandedTransactionIds] = useState<Set<string>>(new Set())
   const [ruleModalTransaction, setRuleModalTransaction] = useState<TransactionRow | null>(null)
@@ -220,7 +267,13 @@ export default function Transactions() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [accountFilter, setAccountFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState(() => {
+    const params = new URLSearchParams(location.search)
+    const cat = params.get('category')
+    return cat === UNCATEGORIZED_VALUE ? UNCATEGORIZED_VALUE : ''
+  })
+  const [showPending, setShowPending] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
   const [search, setSearch] = useState('')
   const [createCategoryForTxnId, setCreateCategoryForTxnId] = useState<string | null>(null)
   const [createCategoryName, setCreateCategoryName] = useState('')
@@ -289,6 +342,7 @@ export default function Transactions() {
     setEndDate('')
     setAccountFilter('')
     setCategoryFilter('')
+    setShowPending(false)
     setSearch('')
     setPage(1)
   }, [])
@@ -541,36 +595,47 @@ export default function Transactions() {
     setCategoryFollowUpPrompt(null)
   }, [categoryFollowUpPrompt, session])
 
-  const createAlwaysCategorizeRule = useCallback(async () => {
+
+  const applyAndCreateRule = useCallback(async () => {
     if (!session?.user || !categoryFollowUpPrompt || categoryFollowUpPrompt.pendingAction) return
 
     const prompt = categoryFollowUpPrompt
     setCategoryFollowUpPrompt((current) =>
-      current ? { ...current, pendingAction: 'create_rule' } : current,
+      current ? { ...current, pendingAction: 'apply_and_rule' } : current,
     )
 
-    const { error: createRuleError } = await supabase.from('transaction_rules').insert({
-      user_id: session.user.id,
-      name: `Auto category: ${prompt.merchantCanonical}`,
-      pattern: prompt.merchantCanonical,
-      match_type: 'equals',
-      account_id: prompt.includeAccountScope ? prompt.accountId : null,
-      set_spending_category_id: prompt.categoryId,
-      explanation: `Created from manual category edit on transaction ${prompt.transactionId}.`,
-      priority: 40,
-      is_active: true,
-    })
+    const [applyResult, ruleResult] = await Promise.all([
+      supabase.rpc('apply_category_to_similar', {
+        merchant_canonical: prompt.merchantCanonical,
+        account_id: prompt.includeAccountScope ? prompt.accountId : null,
+        category_id: prompt.categoryId,
+        lookback_days: 365,
+      }),
+      supabase.from('transaction_rules').insert({
+        user_id: session.user.id,
+        name: `Auto category: ${prompt.merchantCanonical}`,
+        pattern: prompt.merchantCanonical,
+        match_type: 'contains',
+        account_id: prompt.includeAccountScope ? prompt.accountId : null,
+        set_spending_category_id: prompt.categoryId,
+        set_pattern_classification: inferRecurringClassificationFromCategory(prompt.categoryName),
+        explanation: `Created from manual category edit on transaction ${prompt.transactionId}.`,
+        priority: 40,
+        is_active: true,
+      }),
+    ])
 
-    if (createRuleError) {
-      captureException(createRuleError, {
+    if (applyResult.error || ruleResult.error) {
+      const err = applyResult.error ?? ruleResult.error
+      captureException(err, {
         component: 'Transactions',
-        action: 'create-always-categorize-rule',
+        action: 'apply-and-create-rule',
         transaction_id: prompt.transactionId,
       })
       setToast({
         id: Date.now(),
         tone: 'error',
-        message: 'Could not create the recurring categorization rule.',
+        message: 'Could not apply category to all transactions.',
       })
       setCategoryFollowUpPrompt((current) =>
         current ? { ...current, pendingAction: null } : current,
@@ -578,13 +643,109 @@ export default function Transactions() {
       return
     }
 
+    // Fire-and-forget analysis run so the rule applies to any remaining transactions.
+    // Intentionally no setRefreshNonce here - do not disrupt the user mid-categorization.
+    fetchFunctionWithAuth('analysis-daily', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).catch((analysisError) => {
+      captureException(analysisError, {
+        component: 'Transactions',
+        action: 'auto-run-analysis-after-rule',
+      })
+    })
+
     setToast({
       id: Date.now(),
       tone: 'info',
-      message: `Rule saved. Future "${prompt.merchantCanonical}" transactions will use "${prompt.categoryName}".`,
+      message: `Applied "${prompt.categoryName}" to ${Number(applyResult.data ?? 0)} past transaction(s) and saved rule for future ones. Analysis running in background -`,
+      link: { href: '/subscriptions', label: 'check Recurring' },
     })
+    setRefreshNonce((current) => current + 1)
     setCategoryFollowUpPrompt(null)
   }, [categoryFollowUpPrompt, session])
+
+  // --- Hide transaction state & actions ---
+
+  type HideFollowUpState = {
+    transactionId: string
+    merchantCanonical: string
+    accountId: string
+    includeAccountScope: boolean
+    pending: boolean
+  }
+  const [hideFollowUp, setHideFollowUp] = useState<HideFollowUpState | null>(null)
+
+  const hideTransaction = useCallback(async (transaction: TransactionRow) => {
+    if (!session?.user) return
+    const { error } = await supabase
+      .from('transactions')
+      .update({ is_hidden: true })
+      .eq('id', transaction.id)
+      .eq('user_id', session.user.id)
+    if (error) {
+      captureException(error, { component: 'Transactions', action: 'hide-transaction' })
+      setToast({ id: Date.now(), tone: 'error', message: 'Could not hide transaction.' })
+      return
+    }
+    setTransactions((current) => current.filter((t) => t.id !== transaction.id))
+    setHideFollowUp({
+      transactionId: transaction.id,
+      merchantCanonical: transaction.merchant_canonical ?? transaction.merchant_normalized ?? transaction.description_short,
+      accountId: transaction.account_id,
+      includeAccountScope: false,
+      pending: false,
+    })
+  }, [session])
+
+  const hideEverywhereAndCreateRule = useCallback(async () => {
+    if (!session?.user || !hideFollowUp || hideFollowUp.pending) return
+
+    setHideFollowUp((current) => current ? { ...current, pending: true } : current)
+
+    const [hideResult, ruleResult] = await Promise.all([
+      supabase.rpc('hide_similar_transactions', {
+        merchant_canonical: hideFollowUp.merchantCanonical,
+        account_id: hideFollowUp.includeAccountScope ? hideFollowUp.accountId : null,
+        lookback_days: 365,
+      }),
+      supabase.from('transaction_rules').insert({
+        user_id: session.user.id,
+        name: `Hide: ${hideFollowUp.merchantCanonical}`,
+        pattern: hideFollowUp.merchantCanonical,
+        match_type: 'contains',
+        account_id: hideFollowUp.includeAccountScope ? hideFollowUp.accountId : null,
+        set_is_hidden: true,
+        explanation: `Created from hide action on transaction ${hideFollowUp.transactionId}.`,
+        priority: 10,
+        is_active: true,
+      }),
+    ])
+
+    if (hideResult.error || ruleResult.error) {
+      const err = hideResult.error ?? ruleResult.error
+      captureException(err, { component: 'Transactions', action: 'hide-everywhere' })
+      setToast({ id: Date.now(), tone: 'error', message: 'Could not hide all matching transactions.' })
+      setHideFollowUp((current) => current ? { ...current, pending: false } : current)
+      return
+    }
+
+    // Trigger analysis so the rule also applies to any remaining transactions
+    fetchFunctionWithAuth('analysis-daily', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).catch((err) => captureException(err, { component: 'Transactions', action: 'auto-run-analysis-after-hide' }))
+
+    setToast({
+      id: Date.now(),
+      tone: 'info',
+      message: `Hidden ${Number(hideResult.data ?? 0)} past transaction(s). Future matches will be hidden automatically.`,
+    })
+    setHideFollowUp(null)
+    setRefreshNonce((current) => current + 1)
+  }, [hideFollowUp, session])
 
   const addSplitLine = useCallback((transaction: TransactionRow) => {
     ensureSplitDraftForTransaction(transaction)
@@ -952,11 +1113,16 @@ export default function Transactions() {
         let query = supabase
           .from('transactions')
           .select(
-            'id, account_id, category_id, user_category_id, type, category, owner, category_source, rule_id, classification_rule_ref, posted_at, merchant_canonical, merchant_normalized, description_short, description_full, amount, currency',
+            'id, account_id, category_id, user_category_id, type, category, owner, category_source, rule_id, classification_rule_ref, posted_at, merchant_canonical, merchant_normalized, description_short, description_full, amount, currency, is_hidden, is_pending',
             { count: 'exact' },
           )
           .eq('user_id', session.user.id)
           .eq('is_deleted', false)
+          .eq('is_hidden', showHidden)
+
+        if (!showPending) {
+          query = query.eq('is_pending', false)
+        }
 
         if (viewPreset === 'elaine_income') {
           query = query.eq('owner', 'elaine').eq('type', 'income')
@@ -1080,7 +1246,7 @@ export default function Transactions() {
     return () => {
       active = false
     }
-  }, [accountFilter, categoryFilter, createSplitDraftFromRows, endDate, loading, page, refreshNonce, search, session, sortColumn, sortDirection, startDate, viewPreset])
+  }, [accountFilter, categoryFilter, createSplitDraftFromRows, endDate, loading, page, refreshNonce, search, session, showHidden, showPending, sortColumn, sortDirection, startDate, viewPreset])
 
   const updateTransactionCategory = useCallback(
     async (txnId: string, nextValue: string) => {
@@ -1269,7 +1435,7 @@ export default function Transactions() {
   )
 
   return (
-    <main className="space-y-4" aria-busy={fetching}>
+    <main className="space-y-4" aria-busy={fetching} data-testid="transactions-page">
       <section aria-labelledby="transactions-heading" className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 id="transactions-heading" className="text-2xl font-semibold text-foreground">
           Transactions
@@ -1363,6 +1529,7 @@ export default function Transactions() {
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">All categories</option>
+              <option value={UNCATEGORIZED_VALUE}>Uncategorized</option>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -1385,6 +1552,26 @@ export default function Transactions() {
               placeholder="Merchant or description"
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
+          </div>
+          <div className="flex items-end gap-2 pb-0.5">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted">
+              <input
+                type="checkbox"
+                checked={showPending}
+                onChange={(e) => { setShowPending(e.target.checked); setPage(1) }}
+                className="rounded border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              Show pending
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted">
+              <input
+                type="checkbox"
+                checked={showHidden}
+                onChange={(e) => { setShowHidden(e.target.checked); setPage(1) }}
+                className="rounded border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              Show hidden
+            </label>
           </div>
         </div>
 
@@ -1787,6 +1974,13 @@ export default function Transactions() {
                                     className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                   >
                                     Create rule from this transaction
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void hideTransaction(transaction)}
+                                    className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  >
+                                    Hide this transaction
                                   </button>
                                 </div>
 
@@ -2207,17 +2401,59 @@ export default function Transactions() {
             >
               {categoryFollowUpPrompt.pendingAction === 'apply_similar'
                 ? 'Applying...'
-                : 'Apply to past 12 months'}
+                : 'Past only'}
             </button>
             <button
               type="button"
               disabled={categoryFollowUpPrompt.pendingAction !== null}
-              onClick={() => void createAlwaysCategorizeRule()}
+              onClick={() => void applyAndCreateRule()}
               className="rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {categoryFollowUpPrompt.pendingAction === 'create_rule'
-                ? 'Saving rule...'
-                : 'Always categorize this way'}
+              {categoryFollowUpPrompt.pendingAction === 'apply_and_rule'
+                ? 'Applying...'
+                : 'Fix everywhere (past + future)'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {hideFollowUp && (
+        <div
+          className="fixed bottom-4 left-4 z-50 w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-lg"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-sm font-semibold text-foreground">Hide all matching transactions?</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Hide all past <span className="font-medium text-foreground">{hideFollowUp.merchantCanonical}</span>{' '}
+            transactions and create a rule to auto-hide future ones.
+          </p>
+          <label className="mt-3 flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={hideFollowUp.includeAccountScope}
+              disabled={hideFollowUp.pending}
+              onChange={(e) => setHideFollowUp((current) => current ? { ...current, includeAccountScope: e.target.checked } : current)}
+              className="mt-0.5 rounded border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <span>Only this account</span>
+          </label>
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              disabled={hideFollowUp.pending}
+              onClick={() => setHideFollowUp(null)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            >
+              Just this one
+            </button>
+            <button
+              type="button"
+              disabled={hideFollowUp.pending}
+              onClick={() => void hideEverywhereAndCreateRule()}
+              className="rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            >
+              {hideFollowUp.pending ? 'Hiding...' : 'Hide everywhere (past + future)'}
             </button>
           </div>
         </div>
@@ -2291,8 +2527,14 @@ export default function Transactions() {
           aria-live="polite"
         >
           {toast.message}
+          {toast.link && (
+            <Link to={toast.link.href} className="ml-1 underline font-medium" onClick={() => setToast(null)}>
+              {toast.link.label}
+            </Link>
+          )}
         </div>
       )}
     </main>
   )
 }
+

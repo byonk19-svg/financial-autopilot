@@ -1,8 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
-import { classifyRecurring, type RecurringKind } from "../_shared/merchant.ts";
+import { classifyRecurring, normalizeMerchantForRecurring, type RecurringKind } from "../_shared/merchant.ts";
 import { detectRecurringPattern, type Cadence, type RecurringCharge } from "../_shared/recurring.ts";
-import type { EnrichedTxRow, GroupedRecurring, RecurringClassificationRuleRow, SubscriptionCandidate, SubscriptionClassification, TxRow } from "./types.ts";
-import { addDays, clamp, expenseAmount, parseDayKey, round2, toNumber, toUtcDayKey } from "./utils.ts";
+import type {
+  EnrichedTxRow,
+  GroupedRecurring,
+  RecurringClassificationRuleRow,
+  SubscriptionCandidate,
+  SubscriptionClassification,
+} from "./types.ts";
+import { clamp, expenseAmount, parseDayKey, round2, toNumber, toUtcDayKey } from "./utils.ts";
 
 function addCadenceInterval(day: string, cadence: Exclude<Cadence, "unknown">): string {
   const base = parseDayKey(day);
@@ -16,22 +22,6 @@ function addCadenceInterval(day: string, cadence: Exclude<Cadence, "unknown">): 
     base.setUTCFullYear(base.getUTCFullYear() + 1);
   }
   return base.toISOString().slice(0, 10);
-}
-
-function toRecurringCharge(tx: TxRow): RecurringCharge | null {
-  const amount = expenseAmount(tx.amount);
-  if (amount <= 0) return null;
-  return { day: toUtcDayKey(tx.posted_at), absAmount: amount };
-}
-
-function sumByDay(charges: RecurringCharge[]): RecurringCharge[] {
-  const totals = new Map<string, number>();
-  for (const charge of charges) {
-    totals.set(charge.day, (totals.get(charge.day) ?? 0) + charge.absAmount);
-  }
-  return [...totals.entries()]
-    .map(([day, absAmount]) => ({ day, absAmount: round2(absAmount) }))
-    .sort((a, b) => (a.day < b.day ? -1 : 1));
 }
 
 function normalizeKindHint(kindHint: string | null): RecurringKind | null {
@@ -49,6 +39,33 @@ function normalizeKindHint(kindHint: string | null): RecurringKind | null {
     return normalized;
   }
   return null;
+}
+
+function toRecurringCharge(tx: EnrichedTxRow): RecurringCharge | null {
+  const expense = expenseAmount(tx.amount);
+  if (expense > 0) {
+    return { day: toUtcDayKey(tx.posted_at), absAmount: expense };
+  }
+
+  const signedAmount = toNumber(tx.amount);
+  if (signedAmount <= 0) return null;
+
+  const normalizedHint = normalizeKindHint(tx.kind_hint);
+  const hasRecurringSignal = tx.forced_pattern_classification !== null ||
+    (normalizedHint !== null && normalizedHint !== "payroll");
+  if (!hasRecurringSignal) return null;
+
+  return { day: toUtcDayKey(tx.posted_at), absAmount: round2(Math.abs(signedAmount)) };
+}
+
+function sumByDay(charges: RecurringCharge[]): RecurringCharge[] {
+  const totals = new Map<string, number>();
+  for (const charge of charges) {
+    totals.set(charge.day, (totals.get(charge.day) ?? 0) + charge.absAmount);
+  }
+  return [...totals.entries()]
+    .map(([day, absAmount]) => ({ day, absAmount: round2(absAmount) }))
+    .sort((a, b) => (a.day < b.day ? -1 : 1));
 }
 
 function groupRecurringByMerchant(transactions: EnrichedTxRow[]): Map<string, GroupedRecurring> {
@@ -83,12 +100,15 @@ function groupRecurringByMerchant(transactions: EnrichedTxRow[]): Map<string, Gr
 function selectForcedDecisionForCadence(
   group: GroupedRecurring,
   cadence: Cadence | null,
+  allowAnyCadence = false,
 ): {
   classification: SubscriptionClassification;
   ruleRef: string | null;
   explanation: string | null;
 } | null {
-  const eligible = group.forcedDecisions.filter((decision) => decision.cadence === null || decision.cadence === cadence);
+  const eligible = group.forcedDecisions.filter((decision) =>
+    allowAnyCadence || decision.cadence === null || decision.cadence === cadence
+  );
   if (eligible.length === 0) return null;
 
   const counts = new Map<
@@ -134,6 +154,62 @@ function selectForcedDecisionForCadence(
   };
 }
 
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const midpoint = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[midpoint - 1] + sorted[midpoint]) / 2;
+  }
+  return sorted[midpoint];
+}
+
+function stddev(values: number[]): number {
+  if (values.length === 0) return 0;
+  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function cadenceFromMedianDelta(medianDelta: number): Cadence {
+  if (medianDelta >= 5 && medianDelta <= 9) return "weekly";
+  if (medianDelta >= 25 && medianDelta <= 35) return "monthly";
+  if (medianDelta >= 83 && medianDelta <= 97) return "quarterly";
+  if (medianDelta >= 351 && medianDelta <= 379) return "yearly";
+  if (medianDelta >= 20 && medianDelta <= 45) return "monthly";
+  if (medianDelta >= 70 && medianDelta <= 110) return "quarterly";
+  if (medianDelta >= 330 && medianDelta <= 400) return "yearly";
+  return "unknown";
+}
+
+function inferCadenceFromChargeTimeline(charges: RecurringCharge[]): { cadence: Cadence; confidence: number } {
+  if (charges.length < 2) return { cadence: "unknown", confidence: 0.4 };
+  const deltas: number[] = [];
+  for (let i = 1; i < charges.length; i += 1) {
+    const prev = parseDayKey(charges[i - 1].day);
+    const next = parseDayKey(charges[i].day);
+    const diff = Math.round((next.getTime() - prev.getTime()) / (24 * 60 * 60 * 1000));
+    if (diff > 0) deltas.push(diff);
+  }
+  if (deltas.length === 0) return { cadence: "unknown", confidence: 0.4 };
+
+  const medianDelta = median(deltas);
+  const cadence = cadenceFromMedianDelta(medianDelta);
+  const meanDelta = deltas.reduce((sum, value) => sum + value, 0) / deltas.length;
+  const varianceScore = meanDelta > 0 ? 1 - clamp(stddev(deltas) / meanDelta, 0, 1) : 0;
+  const base = cadence === "unknown" ? 0.45 : 0.58;
+  const confidence = round2(clamp(base + varianceScore * 0.22, 0, 0.85));
+  return { cadence, confidence };
+}
+
+function kindFromForcedClassification(classification: SubscriptionClassification): RecurringKind {
+  if (classification === "subscription") return "subscription";
+  if (classification === "bill_loan") return "bill";
+  if (classification === "transfer") return "transfer";
+  if (classification === "ignore") return "recurring";
+  return "recurring";
+}
+
 function toSubscriptionClassification(kind: RecurringKind, confidence: number): SubscriptionClassification {
   if (confidence < 0.8) return "needs_review";
   if (kind === "transfer") return "transfer";
@@ -141,6 +217,47 @@ function toSubscriptionClassification(kind: RecurringKind, confidence: number): 
   if (kind === "payroll") return "ignore";
   if (kind === "subscription") return "subscription";
   return "needs_review";
+}
+
+function buildCandidateFromForcedDecision(
+  userId: string,
+  merchantKey: string,
+  group: GroupedRecurring,
+): SubscriptionCandidate | null {
+  if (group.forcedDecisions.length === 0) return null;
+
+  const dailyCharges = sumByDay(group.charges);
+  if (dailyCharges.length < 2) return null;
+
+  const ordered = [...dailyCharges].sort((a, b) => (a.day < b.day ? -1 : 1));
+  const cadenceGuess = inferCadenceFromChargeTimeline(ordered);
+
+  const forcedDecision = selectForcedDecisionForCadence(group, cadenceGuess.cadence) ??
+    selectForcedDecisionForCadence(group, cadenceGuess.cadence, true);
+  if (!forcedDecision) return null;
+
+  const last = ordered[ordered.length - 1];
+  const prev = ordered.length >= 2 ? ordered[ordered.length - 2] : null;
+  const kind = kindFromForcedClassification(forcedDecision.classification);
+  const fallbackExplanation = forcedDecision.explanation ??
+    "Included from a forced recurring classification rule.";
+
+  return {
+    user_id: userId,
+    merchant_normalized: merchantKey,
+    cadence: cadenceGuess.cadence,
+    confidence: cadenceGuess.confidence,
+    classification: forcedDecision.classification,
+    classification_rule_ref: forcedDecision.ruleRef ?? "transaction_rule:forced-recurring",
+    classification_explanation: fallbackExplanation,
+    kind,
+    is_subscription: forcedDecision.classification === "subscription",
+    last_amount: round2(last.absAmount),
+    prev_amount: prev ? round2(prev.absAmount) : null,
+    last_charge_at: last.day,
+    next_expected_at: cadenceGuess.cadence === "unknown" ? null : addCadenceInterval(last.day, cadenceGuess.cadence),
+    occurrences: ordered.length,
+  };
 }
 
 function buildCandidateFromDetection(
@@ -191,6 +308,7 @@ export function buildSubscriptionCandidates(
 ): SubscriptionCandidate[] {
   const candidates: SubscriptionCandidate[] = [];
   const seen = new Set<string>();
+  const merchantsWithCandidate = new Set<string>();
 
   const grouped180 = groupRecurringByMerchant(tx180);
   for (const [merchantKey, group] of grouped180.entries()) {
@@ -200,6 +318,7 @@ export function buildSubscriptionCandidates(
     const key = `${candidate.merchant_normalized}:${candidate.cadence}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    merchantsWithCandidate.add(candidate.merchant_normalized);
     candidates.push(candidate);
   }
 
@@ -211,7 +330,19 @@ export function buildSubscriptionCandidates(
     const key = `${candidate.merchant_normalized}:${candidate.cadence}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    merchantsWithCandidate.add(candidate.merchant_normalized);
     candidates.push(candidate);
+  }
+
+  for (const [merchantKey, group] of grouped730.entries()) {
+    if (merchantsWithCandidate.has(merchantKey)) continue;
+    const fallbackCandidate = buildCandidateFromForcedDecision(userId, merchantKey, group);
+    if (!fallbackCandidate) continue;
+    const key = `${fallbackCandidate.merchant_normalized}:${fallbackCandidate.cadence}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merchantsWithCandidate.add(fallbackCandidate.merchant_normalized);
+    candidates.push(fallbackCandidate);
   }
 
   return candidates;
@@ -315,7 +446,7 @@ export async function upsertSubscriptions(
   const { data: existingRows } = await admin
     .from("subscriptions")
     .select(
-      "merchant_normalized, cadence, price_history, classification, user_locked, classification_rule_ref, classification_explanation, is_false_positive",
+      "merchant_normalized, cadence, price_history, classification, user_locked, classification_rule_ref, classification_explanation, is_false_positive, is_active",
     )
     .eq("user_id", userId)
     .in("merchant_normalized", merchants);
@@ -327,6 +458,7 @@ export async function upsertSubscriptions(
       classification: SubscriptionClassification;
       userLocked: boolean;
       isFalsePositive: boolean;
+      isActive: boolean;
       classificationRuleRef: string | null;
       classificationExplanation: string | null;
     }
@@ -339,6 +471,7 @@ export async function upsertSubscriptions(
       classification: classification ?? "needs_review",
       userLocked: row.user_locked === true,
       isFalsePositive: row.is_false_positive === true,
+      isActive: row.is_active !== false,
       classificationRuleRef: typeof row.classification_rule_ref === "string" ? row.classification_rule_ref : null,
       classificationExplanation: typeof row.classification_explanation === "string"
         ? row.classification_explanation
@@ -366,6 +499,10 @@ export async function upsertSubscriptions(
   const payload = candidates.flatMap((candidate) => {
     const key = `${candidate.merchant_normalized}:${candidate.cadence}`;
     const existing = existingMap.get(key);
+    // Respect manual "Mark inactive" decisions across re-runs.
+    if (existing && existing.isActive === false) {
+      return [];
+    }
     if (existing?.isFalsePositive) {
       return [];
     }
@@ -403,6 +540,40 @@ export async function upsertSubscriptions(
     .upsert(payload, { onConflict: "user_id,merchant_normalized,cadence" });
 
   if (error) throw new Error("Could not upsert subscriptions.");
+
+  // Deactivate stale alias variants when a canonical merchant+candence row now exists.
+  // Example: COMCAST XFINITY HOUSTON -> COMCAST.
+  const candidateKeys = new Set(payload.map((row) => `${row.merchant_normalized}:${row.cadence}`));
+  const candidateCanonicalCadenceKeys = new Set(
+    payload.map((row) => `${normalizeMerchantForRecurring(row.merchant_normalized)}:${row.cadence}`),
+  );
+
+  const { data: activeRows, error: activeRowsError } = await admin
+    .from("subscriptions")
+    .select("id, merchant_normalized, cadence")
+    .eq("user_id", userId)
+    .eq("is_active", true);
+
+  if (activeRowsError) throw new Error("Could not read active subscriptions for stale cleanup.");
+
+  const staleIds = (activeRows ?? [])
+    .filter((row) => {
+      const directKey = `${row.merchant_normalized}:${row.cadence}`;
+      if (candidateKeys.has(directKey)) return false;
+      const canonicalKey = `${normalizeMerchantForRecurring(row.merchant_normalized)}:${row.cadence}`;
+      return candidateCanonicalCadenceKeys.has(canonicalKey);
+    })
+    .map((row) => row.id);
+
+  if (staleIds.length > 0) {
+    const { error: staleCleanupError } = await admin
+      .from("subscriptions")
+      .update({ is_active: false })
+      .eq("user_id", userId)
+      .in("id", staleIds);
+    if (staleCleanupError) throw new Error("Could not deactivate stale alias subscription rows.");
+  }
+
   return payload.length;
 }
 

@@ -68,6 +68,7 @@ export type TransactionRuleRow = {
   set_merchant_normalized: string | null;
   set_pattern_classification: SubscriptionClassification | null;
   set_spending_category_id: string | null;
+  set_is_hidden: boolean;
   explanation: string | null;
   priority: number;
   created_at: string;
@@ -83,6 +84,7 @@ export type EnrichedTxRow = TxRow & {
   kind_hint: string | null;
   rule_forced_category_id: string | null;
   rule_forced_merchant: boolean;
+  rule_forced_hidden: boolean;
 };
 
 export type AlertInsert = {

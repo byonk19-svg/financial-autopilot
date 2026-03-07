@@ -15,7 +15,7 @@ export type TransactionRow = {
   user_category_id: string | null
   type?: 'income' | 'expense' | 'transfer' | 'savings' | null
   category?: string | null
-  owner?: 'brianna' | 'elaine' | 'household' | 'unknown'
+  owner?: OwnerValue
   category_source?: string | null
   rule_id?: string | null
   classification_rule_ref?: string | null
@@ -26,7 +26,11 @@ export type TransactionRow = {
   description_full?: string | null
   amount: number | string
   currency: string
+  is_hidden?: boolean
+  is_pending?: boolean
 }
+
+export type OwnerValue = 'brianna' | 'elaine' | 'household' | 'unknown'
 
 export type InsightType = 'pattern' | 'opportunity' | 'warning' | 'projection'
 
@@ -57,6 +61,7 @@ export type SubscriptionRecord = {
   next_expected_at: string | null
   confidence: number | string
   is_active: boolean
+  primary_payer?: OwnerValue
 }
 
 export type SubscriptionHistoryRow = {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
+  OwnerValue,
   SubscriptionClassification,
   SubscriptionHistoryRow,
   SubscriptionRecord,
@@ -9,6 +10,7 @@ import { fetchFunctionWithAuth } from '@/lib/fetchWithAuth'
 import {
   hasPriceIncrease,
   parseDate,
+  toRecurringMerchantLabel,
   toMonthlyEquivalentAmount,
   toCurrency,
   toNumber,
@@ -43,6 +45,13 @@ function normalizeClassification(value: string): SubscriptionClassification {
   if (value === 'transfer') return 'transfer'
   if (value === 'ignore') return 'ignore'
   return 'needs_review'
+}
+
+function normalizePayer(value: string | undefined): OwnerValue {
+  if (value === 'brianna' || value === 'elaine' || value === 'household') {
+    return value
+  }
+  return 'unknown'
 }
 
 export function useSubscriptions(userId: string | undefined) {
@@ -97,6 +106,7 @@ export function useSubscriptions(userId: string | undefined) {
         is_false_positive: row.is_false_positive === true,
         user_locked: row.user_locked === true,
         is_active: true,
+        primary_payer: normalizePayer(row.primary_payer),
       })),
     )
   }, [])
@@ -357,8 +367,30 @@ export function useSubscriptions(userId: string | undefined) {
 
       setProcessingId(subscription.id)
       setError('')
+      let previousState: SubscriptionRecord[] = []
+      setSubscriptions((current) => {
+        previousState = current
+        return current.map((row) =>
+          row.id === subscription.id
+            ? {
+                ...row,
+                merchant_normalized: normalizedTarget,
+              }
+            : row,
+        )
+      })
 
       try {
+        const { error: subscriptionUpdateError } = await supabase
+          .from('subscriptions')
+          .update({ merchant_normalized: normalizedTarget })
+          .eq('id', subscription.id)
+          .eq('user_id', userId)
+
+        if (subscriptionUpdateError) {
+          throw subscriptionUpdateError
+        }
+
         const pattern = subscription.merchant_normalized
         const { data: existingAlias, error: lookupError } = await supabase
           .from('merchant_aliases')
@@ -417,6 +449,7 @@ export function useSubscriptions(userId: string | undefined) {
 
         await loadSubscriptions()
       } catch (renameError) {
+        setSubscriptions(previousState)
         captureException(renameError, {
           component: 'useSubscriptions',
           action: 'rename-merchant',
@@ -425,6 +458,217 @@ export function useSubscriptions(userId: string | undefined) {
           next_merchant: normalizedTarget,
         })
         setError('Could not save merchant rename.')
+      } finally {
+        setProcessingId('')
+      }
+    },
+    [loadSubscriptions, userId],
+  )
+
+  const createWebIdSplitAliases = useCallback(
+    async (
+      subscription: SubscriptionRecord,
+      splits: Array<{ webId: string; normalized: string }>,
+    ) => {
+      if (!userId) return
+
+      const normalizedSplits = splits
+        .map((row) => ({
+          webId: row.webId.trim(),
+          normalized: row.normalized.trim().toUpperCase(),
+        }))
+        .filter((row) => row.webId.length > 0 && row.normalized.length > 0)
+
+      if (normalizedSplits.length < 2) {
+        setError('Need at least two WEB ID mappings to split this merchant.')
+        return
+      }
+
+      setProcessingId(subscription.id)
+      setError('')
+
+      try {
+        for (const split of normalizedSplits) {
+          const pattern = `\\bweb\\s+id\\s+${split.webId}\\b`
+          const { data: existingAlias, error: lookupError } = await supabase
+            .from('merchant_aliases')
+            .select('id')
+            .eq('user_id', userId)
+            .is('account_id', null)
+            .eq('pattern', pattern)
+            .maybeSingle()
+
+          if (lookupError) {
+            throw lookupError
+          }
+
+          if (existingAlias?.id) {
+            const { error: updateError } = await supabase
+              .from('merchant_aliases')
+              .update({
+                normalized: split.normalized,
+                match_type: 'regex',
+                priority: 20,
+                is_active: true,
+              })
+              .eq('id', existingAlias.id)
+              .eq('user_id', userId)
+
+            if (updateError) {
+              throw updateError
+            }
+          } else {
+            const { error: insertError } = await supabase.from('merchant_aliases').insert({
+              user_id: userId,
+              pattern,
+              normalized: split.normalized,
+              match_type: 'regex',
+              priority: 20,
+              account_id: null,
+              is_active: true,
+            })
+
+            if (insertError) {
+              throw insertError
+            }
+          }
+        }
+
+        if (ENABLE_RERUN_DETECTION) {
+          const response = await fetchFunctionWithAuth('analysis-daily', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+          })
+
+          if (!response.ok) {
+            setError('Split rules saved, but analysis re-run failed. Use Re-run detection.')
+          }
+        }
+
+        await loadSubscriptions()
+      } catch (splitError) {
+        captureException(splitError, {
+          component: 'useSubscriptions',
+          action: 'create-webid-split-aliases',
+          subscription_id: subscription.id,
+          merchant_normalized: subscription.merchant_normalized,
+        })
+        setError('Could not create WEB ID split rules.')
+      } finally {
+        setProcessingId('')
+      }
+    },
+    [loadSubscriptions, userId],
+  )
+
+  const createAmountSplitRules = useCallback(
+    async (
+      subscription: SubscriptionRecord,
+      splits: Array<{ amount: number; normalized: string }>,
+    ) => {
+      if (!userId) return
+
+      const normalizedSplits = splits
+        .map((row) => ({
+          amount: Number(row.amount),
+          normalized: row.normalized.trim().toUpperCase(),
+        }))
+        .filter((row) => Number.isFinite(row.amount) && row.amount > 0 && row.normalized.length > 0)
+
+      if (normalizedSplits.length < 2) {
+        setError('Need at least two amount mappings to split this merchant.')
+        return
+      }
+
+      setProcessingId(subscription.id)
+      setError('')
+
+      try {
+        const pattern = subscription.merchant_normalized.toLowerCase()
+        for (const split of normalizedSplits) {
+          const minAmount = Number((split.amount - 1).toFixed(2))
+          const maxAmount = Number((split.amount + 1).toFixed(2))
+          const ruleName = `Auto split ${subscription.merchant_normalized} ${split.amount.toFixed(2)}`
+          const priority = split.amount <= Math.min(...normalizedSplits.map((row) => row.amount)) ? 20 : 21
+
+          const { data: existingRule, error: lookupError } = await supabase
+            .from('transaction_rules')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('name', ruleName)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (lookupError) {
+            throw lookupError
+          }
+
+          if (existingRule?.id) {
+            const { error: updateError } = await supabase
+              .from('transaction_rules')
+              .update({
+                match_type: 'contains',
+                pattern,
+                min_amount: minAmount,
+                max_amount: maxAmount,
+                set_merchant_normalized: split.normalized,
+                set_pattern_classification: 'transfer',
+                priority,
+                is_active: true,
+              })
+              .eq('id', existingRule.id)
+              .eq('user_id', userId)
+
+            if (updateError) {
+              throw updateError
+            }
+          } else {
+            const { error: insertError } = await supabase.from('transaction_rules').insert({
+              user_id: userId,
+              name: ruleName,
+              match_type: 'contains',
+              pattern,
+              min_amount: minAmount,
+              max_amount: maxAmount,
+              set_merchant_normalized: split.normalized,
+              set_pattern_classification: 'transfer',
+              priority,
+              is_active: true,
+            })
+
+            if (insertError) {
+              throw insertError
+            }
+          }
+        }
+
+        if (ENABLE_RERUN_DETECTION) {
+          const response = await fetchFunctionWithAuth('analysis-daily', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+          })
+
+          if (!response.ok) {
+            setError('Split rules saved, but analysis re-run failed. Use Re-run detection.')
+          }
+        }
+
+        await loadSubscriptions()
+      } catch (splitError) {
+        captureException(splitError, {
+          component: 'useSubscriptions',
+          action: 'create-amount-split-rules',
+          subscription_id: subscription.id,
+          merchant_normalized: subscription.merchant_normalized,
+        })
+        setError('Could not create amount split rules.')
       } finally {
         setProcessingId('')
       }
@@ -649,7 +893,8 @@ export function useSubscriptions(userId: string | undefined) {
 
     return subscriptions.filter((row) => {
       const merchant = row.merchant_normalized.toLowerCase()
-      const matchesSearch = search.length === 0 || merchant.includes(search)
+      const displayMerchant = toRecurringMerchantLabel(row.merchant_normalized).toLowerCase()
+      const matchesSearch = search.length === 0 || merchant.includes(search) || displayMerchant.includes(search)
 
       const matchesCadence =
         cadenceFilter === 'all'
@@ -800,6 +1045,8 @@ export function useSubscriptions(userId: string | undefined) {
     markFalsePositive,
     updateNotifyDaysBefore,
     renameMerchant,
+    createWebIdSplitAliases,
+    createAmountSplitRules,
     loadSubscriptionHistory,
     rerunDetection,
     loadSubscriptions,

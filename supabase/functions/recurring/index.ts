@@ -17,6 +17,7 @@ const ALLOWED_CLASSIFICATIONS = new Set([
 ]);
 
 type SubscriptionClassification = "needs_review" | "subscription" | "bill_loan" | "transfer" | "ignore";
+type SubscriptionOwner = "brianna" | "elaine" | "household" | "unknown";
 
 type SubscriptionRow = {
   id: string;
@@ -35,6 +36,7 @@ type SubscriptionRow = {
   classified_at: string | null;
   classified_by: string | null;
   updated_at: string;
+  primary_payer?: SubscriptionOwner;
 };
 
 type HistoryTxRow = {
@@ -64,6 +66,14 @@ type ClassifyBody = {
   classification: SubscriptionClassification;
   lock?: boolean;
   createRule?: boolean;
+};
+
+type PayerTxRow = {
+  id: string;
+  posted_at: string;
+  merchant_normalized: string | null;
+  merchant_canonical: string | null;
+  owner: string | null;
 };
 
 class HttpError extends Error {
@@ -137,6 +147,19 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function normalizeOwner(value: string | null): SubscriptionOwner {
+  if (value === "brianna" || value === "elaine" || value === "household") {
+    return value;
+  }
+  return "unknown";
+}
+
+function compareIsoDesc(a: string, b: string): number {
+  if (a > b) return -1;
+  if (a < b) return 1;
+  return 0;
+}
+
 function applyNullableFilter<T>(
   query: T,
   column: string,
@@ -166,6 +189,95 @@ async function resolveUserId(
   return data.user.id;
 }
 
+async function buildPrimaryPayerByMerchant(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  merchants: string[],
+): Promise<Map<string, SubscriptionOwner>> {
+  const payerByMerchant = new Map<string, SubscriptionOwner>();
+  if (merchants.length === 0) return payerByMerchant;
+
+  const merchantSet = new Set(merchants);
+  const since = new Date();
+  since.setMonth(since.getMonth() - 12);
+  const sinceDate = since.toISOString().slice(0, 10);
+
+  const [normalizedResult, canonicalResult] = await Promise.all([
+    admin
+      .from("transactions")
+      .select("id, posted_at, merchant_normalized, merchant_canonical, owner")
+      .eq("user_id", userId)
+      .eq("is_deleted", false)
+      .in("merchant_normalized", merchants)
+      .gte("posted_at", sinceDate)
+      .order("posted_at", { ascending: false })
+      .limit(4000),
+    admin
+      .from("transactions")
+      .select("id, posted_at, merchant_normalized, merchant_canonical, owner")
+      .eq("user_id", userId)
+      .eq("is_deleted", false)
+      .in("merchant_canonical", merchants)
+      .gte("posted_at", sinceDate)
+      .order("posted_at", { ascending: false })
+      .limit(4000),
+  ]);
+
+  if (normalizedResult.error || canonicalResult.error) {
+    throw new HttpError(500, "Could not load recurring payer ownership.");
+  }
+
+  const merged = new Map<string, PayerTxRow>();
+  for (const row of (normalizedResult.data ?? []) as PayerTxRow[]) {
+    merged.set(row.id, row);
+  }
+  for (const row of (canonicalResult.data ?? []) as PayerTxRow[]) {
+    merged.set(row.id, row);
+  }
+
+  const statsByMerchant = new Map<
+    string,
+    Map<SubscriptionOwner, { count: number; latest: string }>
+  >();
+
+  for (const row of merged.values()) {
+    let merchantKey: string | null = null;
+    if (row.merchant_normalized && merchantSet.has(row.merchant_normalized)) {
+      merchantKey = row.merchant_normalized;
+    } else if (row.merchant_canonical && merchantSet.has(row.merchant_canonical)) {
+      merchantKey = row.merchant_canonical;
+    }
+    if (!merchantKey) continue;
+
+    const owner = normalizeOwner(row.owner);
+    const ownerStats = statsByMerchant.get(merchantKey) ?? new Map<SubscriptionOwner, { count: number; latest: string }>();
+    const next = ownerStats.get(owner) ?? { count: 0, latest: row.posted_at };
+    next.count += 1;
+    if (compareIsoDesc(row.posted_at, next.latest) < 0) {
+      next.latest = row.posted_at;
+    }
+    ownerStats.set(owner, next);
+    statsByMerchant.set(merchantKey, ownerStats);
+  }
+
+  for (const merchant of merchants) {
+    const ownerStats = statsByMerchant.get(merchant);
+    if (!ownerStats || ownerStats.size === 0) {
+      payerByMerchant.set(merchant, "unknown");
+      continue;
+    }
+
+    const winner = [...ownerStats.entries()]
+      .sort((a, b) => {
+        if (a[1].count !== b[1].count) return b[1].count - a[1].count;
+        return compareIsoDesc(a[1].latest, b[1].latest);
+      })[0]?.[0] ?? "unknown";
+    payerByMerchant.set(merchant, winner);
+  }
+
+  return payerByMerchant;
+}
+
 async function listRecurring(
   admin: ReturnType<typeof createClient>,
   req: Request,
@@ -184,6 +296,23 @@ async function listRecurring(
     throw new HttpError(500, "Could not load recurring patterns.");
   }
 
+  const rows = (data ?? []) as SubscriptionRow[];
+  const merchants = [...new Set(rows.map((row) => row.merchant_normalized))];
+  let payerByMerchant = new Map<string, SubscriptionOwner>();
+  try {
+    payerByMerchant = await buildPrimaryPayerByMerchant(admin, userId, merchants);
+  } catch (payerLookupError) {
+    const details = errorInfo(payerLookupError);
+    console.error(JSON.stringify({
+      function: FUNCTION_NAME,
+      action: "list_recurring_payer_lookup",
+      user_id: userId,
+      merchant_count: merchants.length,
+      message: details.message,
+      stack: details.stack,
+    }));
+  }
+
   const grouped: Record<SubscriptionClassification, SubscriptionRow[]> = {
     needs_review: [],
     subscription: [],
@@ -192,9 +321,12 @@ async function listRecurring(
     ignore: [],
   };
 
-  for (const row of (data ?? []) as SubscriptionRow[]) {
+  for (const row of rows) {
     const key = ALLOWED_CLASSIFICATIONS.has(row.classification) ? row.classification : "needs_review";
-    grouped[key as SubscriptionClassification].push(row);
+    grouped[key as SubscriptionClassification].push({
+      ...row,
+      primary_payer: payerByMerchant.get(row.merchant_normalized) ?? "unknown",
+    });
   }
 
   return json(req, {

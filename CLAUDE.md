@@ -76,6 +76,40 @@ supabase functions deploy <function-name>
 supabase secrets set KEY=VALUE
 ```
 
+## Windows + Supabase CLI Runbook
+
+- Do not use `npm install -g supabase` (global install is not supported).
+- Use `npx.cmd supabase ...` from the repo root.
+- The root package does not provide `npm run dev`; use:
+  - `npm --workspace apps/web run dev -- --host 127.0.0.1 --port 5174`
+
+Common commands (PowerShell):
+
+```powershell
+npx.cmd supabase login
+npx.cmd supabase link --project-ref jefnjglsfxwalkslctns
+npx.cmd supabase functions deploy analysis-daily --project-ref jefnjglsfxwalkslctns --no-verify-jwt --use-api
+npx.cmd supabase functions deploy simplefin-sync --project-ref jefnjglsfxwalkslctns --no-verify-jwt --use-api
+npx.cmd supabase functions list --project-ref jefnjglsfxwalkslctns -o json
+```
+
+Important PowerShell syntax:
+- Do not wrap project ref in `<...>`; use raw ref only.
+- Example: `--project-ref jefnjglsfxwalkslctns`
+
+Cron secret notes:
+- `CRON_SECRET` values are write-only in Supabase.
+- After setting a new value, store it locally (password manager or local env var) because you cannot read it back.
+
+Trigger and verify cron-protected functions:
+
+```powershell
+$cronSecret = "YOUR_CRON_SECRET"
+$headers = @{ "x-cron-secret" = $cronSecret; "Content-Type" = "application/json" }
+Invoke-RestMethod -Method POST -Uri "https://jefnjglsfxwalkslctns.supabase.co/functions/v1/simplefin-sync" -Headers $headers -Body "{}"
+Invoke-RestMethod -Method POST -Uri "https://jefnjglsfxwalkslctns.supabase.co/functions/v1/analysis-daily" -Headers $headers -Body "{}"
+```
+
 ## Environment
 
 Frontend (`apps/web/.env`):
@@ -120,12 +154,25 @@ This is a credit-card-first household.
 - `classification` (`needs_review | subscription | bill_loan | transfer | ignore`)
 - `confidence` — detection confidence score
 
-## Rule Engines (Both Exist — Do Not Conflate)
+## Rule Engines (Both Exist � Do Not Conflate)
 
-1. `transaction_rules` — older, manual UI flow (alias rules + behavior rules)
-2. `transaction_category_rules_v1` — sync-time auto-categorization (newer)
+1. `transaction_rules` (applied by `analysis-daily` job) � created via Transactions page UI ("Fix everywhere" button) or Rules page
+2. `transaction_category_rules_v1` (applied at sync time) � managed via Category Rules page
 
 For ingestion-time automation, prefer `transaction_category_rules_v1`.
+Rules in `transaction_rules` apply on the next daily analysis run (or via "Run analysis now" on the Rules page).
+
+### transaction_rules match_type behavior (important)
+
+The rules engine builds a **haystack** by concatenating all three merchant fields:
+`normalizeMatchInput("${merchant_canonical} ${merchant_normalized} ${description_short}")`
+
+This means:
+- `contains` — use for auto-generated rules (e.g. "Fix everywhere", "Hide everywhere"). Checks `haystack.includes(pattern)`.
+- `equals` — only works if the entire concatenated haystack exactly equals the pattern. Almost never useful in practice; do not use for auto-generated rules.
+- `regex` — full regex match against the haystack.
+
+**Always use `match_type: 'contains'` for auto-generated rules** created from merchant canonicals.
 
 ## Key Database Migrations to Keep Mentally Aligned
 
@@ -144,6 +191,8 @@ For ingestion-time automation, prefer `transaction_category_rules_v1`.
 | `0049` | Optional account-owner inference by institution pattern |
 | `0050` | Account owner assignment RPC + UI flow |
 | `0051` | Comcast/Xfinity canonical merchant name fix |
+| `0052` | `is_hidden` on transactions + `hide_similar_transactions` RPC + `set_is_hidden` on `transaction_rules` |
+| `0053` | Auto-generated rule bug fix: patch `match_type='equals'` to `'contains'` |
 
 ## Non-Negotiable Behavior
 
@@ -277,17 +326,80 @@ MonthBalanceRecord                  // Month opening balance + threshold
 
 Nav is grouped in the sticky header (`App.tsx`):
 
-- **Main**: Dashboard, Overview, Transactions, Cash Flow, Shift Log
-- **Automation**: Subscriptions, Alerts
-- **Config**: Rules, Auto-Rules (ClassificationRules), Settings
+- **Main**: Dashboard, Transactions, Cash Flow, Accounts (`/overview`)
+- **Automation**: Recurring (`/subscriptions`), Alerts
+- **Config**: Rules, Recurring Rules (`/classification-rules`), Shift Log, Settings
 
+Note: The route is still `/subscriptions` but the nav label and page heading say "Recurring".
+The route is still `/overview` but the nav label and page heading say "Accounts".
 Unauthenticated users are redirected to `/login`. Auth state managed via `useSession()`.
+
+## Page Clarifications (important � naming is confusing)
+
+- **Rules** (`/rules`): Manages `transaction_rules` (spending category assignment + merchant aliases). Applied by analysis-daily. Has "Run analysis now" button.
+- **Recurring Rules** (`/classification-rules`): Manages `recurring_classification_rules` — controls whether a recurring pattern is classified as subscription/bill/transfer/ignore. NOT for spending categories. NOT `transaction_category_rules_v1`.
+- **`transaction_category_rules_v1`**: Sync-time spending category rules. Applied when new transactions import. **There is no UI for this table.** Manage via Supabase dashboard directly if needed.
+
+## Categorization Workflow
+
+Transactions start uncategorized. User builds rules over time:
+
+1. Dashboard attention card → "N transactions need categorization" → links to `/transactions?category=__uncategorized__`
+2. On the Transactions page, categorize a transaction via the dropdown
+3. Follow-up prompt appears:
+   - "Past only" — calls `apply_category_to_similar` RPC (12-month lookback, no rule saved)
+   - "Fix everywhere (past + future)" — applies to past AND inserts into `transaction_rules` AND triggers analysis-daily automatically
+4. Analysis-daily applies all `transaction_rules` to existing uncategorized transactions
+
+`buildSearchAndCategoryOrFilter()` handles the `__uncategorized__` special value with:
+`and(user_category_id.is.null,category_id.is.null)`
+
+Key gap: `transaction_rules` are applied by analysis-daily (nightly + on-demand). New transactions imported by sync use `transaction_category_rules_v1` (no UI). "Fix everywhere" triggers analysis-daily automatically so rules apply immediately, but analysis runs async (~30–60s). After clicking "Fix everywhere", the success toast includes a "check Recurring" link. The Recurring page also has a "Re-run detection" button that triggers analysis and reloads.
+
+### Recurring detection requirements
+
+A merchant only appears in the Recurring page if:
+1. It has **≥ 2 charges** in the past 180 days (monthly/quarterly) or 730 days (yearly) that fall within amount tolerance (±10% of median, min ±$2)
+2. The gaps between charges fall within a cadence window: weekly (5–9d), monthly (25–35d), quarterly (83–97d), yearly (351–379d)
+3. The merchant's `effective_merchant` key is consistent across charges (not "UNKNOWN")
+
+`set_pattern_classification` on a `transaction_rules` entry overrides the Recurring classification (subscription/bill_loan/transfer) but does NOT force-include a merchant that fails pattern detection. The `CATEGORY_TO_RECURRING_CLASSIFICATION` map in `Transactions.tsx` sets this automatically when "Fix everywhere" is used.
+
+### Per-account recurring split pattern
+
+To split one brand into separate recurring entries by card/account (example: Netflix on 3 cards), use account-scoped `transaction_rules` that set `set_merchant_normalized` to distinct keys per account, such as:
+
+- `NETFLIX CHASE`
+- `NETFLIX CITI`
+- `NETFLIX WAYFAIR`
+
+Run `analysis-daily` after inserting/updating rules so subscriptions are re-derived.
+
+### Pending transaction behavior
+
+- Transactions may stay `is_pending = true` until the provider emits a posted version.
+- Pending rows are excluded from most KPI and recurring calculations.
+- UI now supports hiding pending rows by default in Transactions (`Show pending` toggle).
+
+`simplefin-sync` cleanup behavior:
+- Safe auto-reconcile archives stale pending rows only when a matching posted row is found.
+- One-time forced cleanup is available for operational recovery:
+  - Send JSON body with `force_archive_pending_days` in cron mode.
+
+Example:
+
+```powershell
+$cronSecret = "YOUR_CRON_SECRET"
+$headers = @{ "x-cron-secret" = $cronSecret; "Content-Type" = "application/json" }
+$body = @{ force_archive_pending_days = 7 } | ConvertTo-Json
+Invoke-RestMethod -Method POST -Uri "https://jefnjglsfxwalkslctns.supabase.co/functions/v1/simplefin-sync" -Headers $headers -Body $body
+```
 
 ## Current Priorities
 
 1. Keep sync behavior safe (no overwriting user-managed account ownership)
 2. Maintain accurate cash flow vs spending separation
-3. Improve owner assignment UX reliability
+3. Improve categorization coverage (most transactions start uncategorized; user builds rules over time)
 4. Keep recurring/review workflow simple and explainable
 
 ## User Setup Assumptions
@@ -297,3 +409,4 @@ Unauthenticated users are redirected to `/login`. Auth state managed via `useSes
 - Most spending is on credit cards
 - Paychecks land in checking accounts
 - Goal is a clean, obvious, and accurate workflow with minimal manual maintenance
+

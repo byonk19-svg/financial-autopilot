@@ -3,6 +3,28 @@ import type { SubscriptionCadence } from '@/lib/types'
 export type { SubscriptionCadence } from '@/lib/types'
 export type DensityMode = 'comfortable' | 'compact'
 
+function toTitleCase(input: string): string {
+  return input
+    .split(/\s+/)
+    .filter((token) => token.length > 0)
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1).toLowerCase())
+    .join(' ')
+}
+
+export function toRecurringMerchantLabel(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return 'Unknown Merchant'
+
+  const normalized = trimmed.toUpperCase()
+  if (normalized === 'NFX') return 'Netflix'
+  if (normalized.startsWith('NFX ')) {
+    const suffix = trimmed.slice(4).trim()
+    return suffix ? `Netflix - ${toTitleCase(suffix)}` : 'Netflix'
+  }
+
+  return trimmed
+}
+
 export function toNumber(value: number | string | null): number {
   if (typeof value === 'number') return value
   if (typeof value === 'string') {

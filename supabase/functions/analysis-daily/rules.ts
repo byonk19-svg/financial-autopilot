@@ -16,7 +16,7 @@ export async function fetchTransactionRules(
   const { data, error } = await admin
     .from("transaction_rules")
     .select(
-      "id, name, match_type, pattern, account_id, cadence, min_amount, max_amount, target_amount, amount_tolerance_pct, set_merchant_normalized, set_pattern_classification, set_spending_category_id, explanation, priority, created_at",
+      "id, name, match_type, pattern, account_id, cadence, min_amount, max_amount, target_amount, amount_tolerance_pct, set_merchant_normalized, set_pattern_classification, set_spending_category_id, set_is_hidden, explanation, priority, created_at",
     )
     .eq("user_id", userId)
     .eq("is_active", true)
@@ -137,6 +137,7 @@ export function applyRulesToTransactions(
       kind_hint: alias?.kind_hint ?? null,
       rule_forced_category_id: matchedRule?.set_spending_category_id ?? null,
       rule_forced_merchant: Boolean(matchedRule?.set_merchant_normalized?.trim() || alias?.normalized),
+      rule_forced_hidden: matchedRule?.set_is_hidden === true,
     });
   }
 
@@ -158,6 +159,7 @@ export async function persistTransactionRuleMatches(
       user_category_id?: string | null;
       merchant_canonical?: string | null;
       merchant_normalized?: string | null;
+      is_hidden?: boolean;
     } = {
       classification_rule_ref: row.applied_rule_ref,
       classification_explanation: row.applied_rule_explanation,
@@ -170,6 +172,10 @@ export async function persistTransactionRuleMatches(
     if (row.rule_forced_merchant && row.effective_merchant && row.effective_merchant !== "UNKNOWN") {
       updatePayload.merchant_canonical = row.effective_merchant;
       updatePayload.merchant_normalized = row.effective_merchant;
+    }
+
+    if (row.rule_forced_hidden) {
+      updatePayload.is_hidden = true;
     }
 
     const { error } = await admin

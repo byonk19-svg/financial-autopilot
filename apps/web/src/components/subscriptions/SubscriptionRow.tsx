@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import type {
+  OwnerValue,
   SubscriptionCadence,
   SubscriptionClassification,
   SubscriptionHistoryRow,
@@ -14,6 +15,7 @@ import {
   formatIncreaseDelta,
   toCadenceLabel,
   toCurrency,
+  toRecurringMerchantLabel,
   toMonthlyEquivalentAmount,
   toNumber,
   toRenewalLabel,
@@ -25,6 +27,7 @@ export type SubscriptionRowProps = {
   merchant: string
   cadence: SubscriptionCadence
   confidence: number | string
+  primaryPayer?: OwnerValue
   lastAmount: number | string | null
   prevAmount: number | string | null
   nextExpected: string | null
@@ -44,6 +47,8 @@ export type SubscriptionRowProps = {
   onSetClassification?: (next: SubscriptionClassification, createRule: boolean) => void | Promise<void>
   onUpdateNotifyDaysBefore?: (next: number | null) => void | Promise<void>
   onRenameMerchant?: (nextMerchant: string) => void | Promise<void>
+  onCreateWebIdSplitAliases?: (splits: Array<{ webId: string; normalized: string }>) => void | Promise<void>
+  onCreateAmountSplitRules?: (splits: Array<{ amount: number; normalized: string }>) => void | Promise<void>
   showClassifyControl?: boolean
   onToggleLock?: () => void | Promise<void>
   onUndoClassification?: () => void | Promise<void>
@@ -57,10 +62,18 @@ function classificationLabel(classification: SubscriptionRowProps['classificatio
   return 'Needs Review'
 }
 
+function payerLabel(payer: OwnerValue | undefined): string {
+  if (payer === 'brianna') return 'Brianna'
+  if (payer === 'elaine') return 'Elaine'
+  if (payer === 'household') return 'Household'
+  return 'Unknown'
+}
+
 export function SubscriptionRow({
   merchant,
   cadence,
   confidence,
+  primaryPayer,
   lastAmount,
   prevAmount,
   nextExpected,
@@ -79,6 +92,8 @@ export function SubscriptionRow({
   onSetClassification,
   onUpdateNotifyDaysBefore,
   onRenameMerchant,
+  onCreateWebIdSplitAliases,
+  onCreateAmountSplitRules,
   showClassifyControl = false,
   onToggleLock,
   onUndoClassification,
@@ -93,6 +108,7 @@ export function SubscriptionRow({
 
   const parsedLastAmount = toNumber(lastAmount)
   const parsedPrevAmount = toNumber(prevAmount)
+  const displayMerchant = toRecurringMerchantLabel(merchant)
   const confidencePercent = Math.round(toNumber(confidence) * 100)
   const amountChange = parsedPrevAmount > 0 ? parsedLastAmount - parsedPrevAmount : 0
   const increaseDelta = hasIncrease
@@ -120,6 +136,14 @@ export function SubscriptionRow({
         : trendRatio > 0
           ? `Trend: up ${(trendRatio * 100).toFixed(1)}% vs recent average (${toCurrency(priorAverageAmount)})`
           : `Trend: down ${Math.abs(trendRatio * 100).toFixed(1)}% vs recent average (${toCurrency(priorAverageAmount)})`
+  const historyWebIds = [...new Set(
+    historyRows
+      .map((row) => {
+        const match = row.description_short.match(/WEB ID:\s*([A-Z0-9]+)/i)
+        return match?.[1] ?? null
+      })
+      .filter((value): value is string => value !== null),
+  )]
 
   const toggleExpanded = () => {
     setExpanded((current) => {
@@ -151,7 +175,7 @@ export function SubscriptionRow({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className={`truncate font-semibold text-foreground ${compact ? 'text-sm' : 'text-base'}`}>
-                {merchant}
+                {displayMerchant}
               </h3>
               <Badge variant="secondary" className={`${badgeSize} rounded-full`}>
                 {classificationLabel(classification)}
@@ -196,7 +220,7 @@ export function SubscriptionRow({
               )}
             </div>
             <p className={`mt-1 text-muted-foreground ${compact ? 'text-xs' : 'text-sm'}`}>
-              {toCadenceLabel(cadence)} and {confidencePercent}% confidence
+              {toCadenceLabel(cadence)} and {confidencePercent}% confidence - Paid by {payerLabel(primaryPayer)}
             </p>
           </div>
 
@@ -233,7 +257,7 @@ export function SubscriptionRow({
             {showClassifyControl && onSetClassification && (
               <>
                 <select
-                  aria-label={`Classify ${merchant}`}
+                  aria-label={`Classify ${displayMerchant}`}
                   value={classification}
                   disabled={isUpdating}
                   onClick={(event) => event.stopPropagation()}
@@ -331,7 +355,7 @@ export function SubscriptionRow({
               </div>
             </div>
 
-            {(showClassifyControl || onToggleLock || onUndoClassification || onUpdateNotifyDaysBefore || onRenameMerchant) && (
+            {(showClassifyControl || onToggleLock || onUndoClassification || onUpdateNotifyDaysBefore || onRenameMerchant || onCreateWebIdSplitAliases || onCreateAmountSplitRules) && (
               <div
                 className={`mt-2 flex flex-wrap items-center gap-2 ${compact ? 'text-[11px]' : 'text-xs'}`}
                 onClick={(event) => event.stopPropagation()}
@@ -420,6 +444,72 @@ export function SubscriptionRow({
                     className={buttonSize}
                   >
                     Rename merchant
+                  </Button>
+                )}
+                {onCreateWebIdSplitAliases && historyWebIds.length >= 2 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUpdating}
+                    onClick={() => {
+                      const suggested = ['BETTERMENT ROTH', 'BETTERMENT INVESTMENT']
+                      const splits: Array<{ webId: string; normalized: string }> = []
+
+                      for (let index = 0; index < historyWebIds.length; index += 1) {
+                        const webId = historyWebIds[index]
+                        const entered = window.prompt(
+                          `Name for WEB ID ${webId}`,
+                          suggested[index] ?? `${merchant} ${webId.slice(-4)}`,
+                        )
+                        if (!entered) return
+                        const normalized = entered.trim()
+                        if (!normalized) return
+                        splits.push({ webId, normalized })
+                      }
+
+                      if (splits.length >= 2) {
+                        void onCreateWebIdSplitAliases(splits)
+                      }
+                    }}
+                    className={buttonSize}
+                  >
+                    Split by WEB ID
+                  </Button>
+                )}
+                {onCreateAmountSplitRules && historyRows.length >= 2 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUpdating}
+                    onClick={() => {
+                      const uniqueAmounts = [...new Set(
+                        historyRows
+                          .map((row) => Math.abs(toNumber(row.amount)))
+                          .filter((value) => Number.isFinite(value) && value > 0),
+                      )].sort((a, b) => a - b)
+
+                      if (uniqueAmounts.length < 2) {
+                        window.alert('Need at least two different amounts in this row to split by amount.')
+                        return
+                      }
+
+                      const lowerAmount = uniqueAmounts[0]
+                      const higherAmount = uniqueAmounts[uniqueAmounts.length - 1]
+                      const merchantUpper = merchant.toUpperCase()
+                      const isBetterment = merchantUpper.includes('BETTERMENT')
+                      const lowName = isBetterment ? 'BETTERMENT ROTH' : `${merchantUpper} LOW`
+                      const highName = isBetterment ? 'BETTERMENT INVESTMENT' : `${merchantUpper} HIGH`
+
+                      void onCreateAmountSplitRules([
+                        { amount: lowerAmount, normalized: lowName },
+                        { amount: higherAmount, normalized: highName },
+                      ])
+                    }}
+                    className={buttonSize}
+                  >
+                    Split by amount
                   </Button>
                 )}
               </div>

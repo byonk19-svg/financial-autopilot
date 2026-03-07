@@ -26,16 +26,15 @@ const navGroups: NavGroup[] = [
     label: 'Main',
     items: [
       { to: '/', label: 'Dashboard' },
-      { to: '/overview', label: 'Overview' },
       { to: '/transactions', label: 'Transactions' },
       { to: '/cash-flow', label: 'Cash Flow' },
-      { to: '/shift-log', label: 'Shift Log' },
+      { to: '/overview', label: 'Accounts' },
     ],
   },
   {
     label: 'Automation',
     items: [
-      { to: '/subscriptions', label: 'Subscriptions' },
+      { to: '/subscriptions', label: 'Recurring' },
       { to: '/alerts', label: 'Alerts' },
     ],
   },
@@ -43,7 +42,8 @@ const navGroups: NavGroup[] = [
     label: 'Config',
     items: [
       { to: '/rules', label: 'Rules' },
-      { to: '/classification-rules', label: 'Auto-Rules' },
+      { to: '/classification-rules', label: 'Recurring Rules' },
+      { to: '/shift-log', label: 'Shift Log' },
       { to: '/settings', label: 'Settings' },
     ],
   },
