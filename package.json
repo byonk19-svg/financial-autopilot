@@ -8,6 +8,7 @@
     "test": "npm run test:unit",
     "test:unit": "vitest run supabase/functions/_shared/rules_v1.test.ts supabase/functions/_shared/recurring_v1.test.ts supabase/functions/_shared/merchant.test.ts",
     "test:e2e": "playwright test",
+    "test:e2e:a11y": "playwright test tests/e2e/a11y.spec.ts",
     "test:e2e:auth": "playwright test tests/e2e/authenticated-flow.spec.ts",
     "test:e2e:auth:setup": "node tests/e2e/create-auth-state.mjs"
   },
@@ -21,6 +22,7 @@
     "react-dom": "18.2.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.56.1",
     "supabase": "^2.77.0",
     "vitest": "^3.2.4"

@@ -12,6 +12,19 @@ Current coverage in `test:e2e`:
 - Authenticated flow spec is included but auto-skips without auth setup
 - Edge-case matrix: `tests/e2e/EDGE_CASE_MATRIX.md`
 
+## Accessibility gate (axe)
+
+This suite fails on any `serious` or `critical` WCAG A/AA violation.
+
+```powershell
+npm.cmd run test:e2e:a11y
+```
+
+Coverage includes:
+- `/login` (unauthenticated)
+- `/login?next=/transactions` redirect state
+- `/subscriptions` when auth setup exists (auto-skips without auth)
+
 ## Authenticated flow (real app actions)
 
 This suite covers:
@@ -58,3 +71,4 @@ The setup command opens a browser on `/login`, waits for you to sign in, then sa
 
 - Authenticated tests call real APIs and can take up to a few minutes.
 - They will fail if bank connection/session is invalid.
+- CI runs `npm run test:e2e`, which now includes accessibility checks.
