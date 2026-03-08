@@ -21,7 +21,7 @@ This milestone closes planning and audit blockers first so phase planning, execu
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01: Bootstrap planning files and rerun milestone audit baseline checks
+- [ ] 01-01-PLAN.md - Bootstrap planning files and rerun milestone audit baseline checks
 
 ## Progress
 
