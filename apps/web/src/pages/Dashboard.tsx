@@ -29,69 +29,12 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { captureException } from "@/lib/errorReporting";
 import { useSession } from "@/lib/session";
 import { supabase } from "@/lib/supabase";
-
-type NumberLike = number | string | null | undefined;
-
-type ShiftSummaryRow = {
-  shift_id: string;
-  employer_name: string;
-  location_name: string | null;
-  shift_date: string;
-  clock_in: string | null;
-  clock_out: string | null;
-  hours_worked: NumberLike;
-  gross_pay: NumberLike;
-  status: string;
-};
-
-type ShiftBreakdownRow = {
-  employer_name: string;
-  hours: NumberLike;
-  gross_pay: NumberLike;
-};
-
-type ShiftWeekSummaryRpc = {
-  week_start: string;
-  week_end: string;
-  shifts: ShiftSummaryRow[] | null;
-  total_hours: NumberLike;
-  total_gross_pay: NumberLike;
-  employer_breakdown: ShiftBreakdownRow[] | null;
-};
-
-type SavingsBucketSummaryRow = {
-  bucket_id: string;
-  name: string;
-  owner: "brianna" | "elaine" | "household";
-  target_amount: NumberLike;
-  current_balance: NumberLike;
-  allocation_pct: NumberLike;
-  weekly_target: NumberLike;
-  goal_date: string | null;
-  priority: number;
-  progress_pct: NumberLike;
-  weeks_to_goal: number | null;
-};
-
-type SavingsBucketRow = {
-  bucket_id: string;
-  name: string;
-  owner: "brianna" | "elaine" | "household";
-  target_amount: number | null;
-  current_balance: number | string | null;
-  progress_pct: number | null;
-  weeks_to_goal: number | null;
-};
-
-type SavingsBucketSummaryRpc = {
-  buckets: SavingsBucketRow[] | null;
-  total_saved: NumberLike;
-  total_by_owner: {
-    brianna?: NumberLike;
-    elaine?: NumberLike;
-    household?: NumberLike;
-  } | null;
-};
+import type {
+  NumberLike,
+  SavingsBucketSummaryRow,
+  SavingsBucketSummaryRpc,
+  ShiftWeekSummaryRpc,
+} from "@/lib/types";
 
 function toNumber(value: NumberLike): number {
   const parsed = Number(value);

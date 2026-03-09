@@ -15,6 +15,7 @@ import { TransactionFilterChips } from '@/components/transactions/TransactionFil
 import { useTransactionFilterChips } from '@/hooks/useTransactionFilterChips'
 import { useTransactionSelection } from '@/hooks/useTransactionSelection'
 import type { AccountOption, CategoryOption, TransactionRow } from '@/lib/types'
+import { inferRecurringClassificationFromCategory } from '@/lib/categoryRules'
 import { captureException } from '../lib/errorReporting'
 import { fetchFunctionWithAuth } from '../lib/fetchWithAuth'
 import { getLoginRedirectPath } from '../lib/loginRedirect'
@@ -23,45 +24,6 @@ import { useSession } from '../lib/session'
 
 const PAGE_SIZE = 50
 const UNCATEGORIZED_VALUE = '__uncategorized__'
-
-// Maps spending category names to recurring pattern classifications.
-// Used when "Fix everywhere" creates a transaction_rule so the Recurring page
-// automatically picks up the correct classification.
-const CATEGORY_TO_RECURRING_CLASSIFICATION: Record<string, 'subscription' | 'bill_loan' | 'transfer'> = {
-  'Streaming & Apps': 'subscription',
-  'Utilities & Internet': 'bill_loan',
-  'Phone': 'bill_loan',
-  'Mortgage & Housing': 'bill_loan',
-  'Insurance': 'bill_loan',
-  'Loan Payment': 'bill_loan',
-  'Childcare & School': 'bill_loan',
-  'Healthcare': 'bill_loan',
-  'Credit Card Payment': 'transfer',
-  'Savings Transfer': 'transfer',
-  'Investing': 'transfer',
-}
-
-function inferRecurringClassificationFromCategory(categoryName: string): 'subscription' | 'bill_loan' | 'transfer' | null {
-  const exact = CATEGORY_TO_RECURRING_CLASSIFICATION[categoryName]
-  if (exact) return exact
-
-  const normalized = categoryName.trim().toLowerCase()
-  if (!normalized) return null
-
-  if (/(subscription|stream|app|membership|software|saas|media)/.test(normalized)) {
-    return 'subscription'
-  }
-
-  if (/(utilit|internet|phone|mobile|mortgage|housing|insurance|loan|bill|childcare|school|health|medical)/.test(normalized)) {
-    return 'bill_loan'
-  }
-
-  if (/(transfer|saving|invest|credit card payment|cc payment|autopay)/.test(normalized)) {
-    return 'transfer'
-  }
-
-  return null
-}
 const FALLBACK_CATEGORY_NAMES = [
   'Payroll - Brianna',
   'Payroll - Elaine',

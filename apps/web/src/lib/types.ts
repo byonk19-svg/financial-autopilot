@@ -201,3 +201,71 @@ export type CashFlowLedgerDay = {
   isToday: boolean
   isBelowThreshold: boolean
 }
+
+// Utility type for numeric values returned from Supabase RPC (may be number, string, null, or undefined)
+export type NumberLike = number | string | null | undefined
+
+// --- Shift log RPC shapes (used by Dashboard) ---
+
+export type ShiftSummaryRow = {
+  shift_id: string
+  employer_name: string
+  location_name: string | null
+  shift_date: string
+  clock_in: string | null
+  clock_out: string | null
+  hours_worked: NumberLike
+  gross_pay: NumberLike
+  status: string
+}
+
+export type ShiftBreakdownRow = {
+  employer_name: string
+  hours: NumberLike
+  gross_pay: NumberLike
+}
+
+export type ShiftWeekSummaryRpc = {
+  week_start: string
+  week_end: string
+  shifts: ShiftSummaryRow[] | null
+  total_hours: NumberLike
+  total_gross_pay: NumberLike
+  employer_breakdown: ShiftBreakdownRow[] | null
+}
+
+// --- Savings bucket RPC shapes (used by Dashboard) ---
+
+export type SavingsBucketSummaryRow = {
+  bucket_id: string
+  name: string
+  owner: 'brianna' | 'elaine' | 'household'
+  target_amount: NumberLike
+  current_balance: NumberLike
+  allocation_pct: NumberLike
+  weekly_target: NumberLike
+  goal_date: string | null
+  priority: number
+  progress_pct: NumberLike
+  weeks_to_goal: number | null
+}
+
+export type SavingsBucketRow = {
+  bucket_id: string
+  name: string
+  owner: 'brianna' | 'elaine' | 'household'
+  target_amount: number | null
+  current_balance: number | string | null
+  progress_pct: number | null
+  weeks_to_goal: number | null
+}
+
+export type SavingsBucketSummaryRpc = {
+  buckets: SavingsBucketRow[] | null
+  total_saved: NumberLike
+  total_by_owner: {
+    brianna?: NumberLike
+    elaine?: NumberLike
+    household?: NumberLike
+  } | null
+}
