@@ -269,3 +269,42 @@ export type SavingsBucketSummaryRpc = {
     household?: NumberLike
   } | null
 }
+
+// --- Alert types ---
+
+export type AlertRow = {
+  id: string
+  alert_type:
+    | 'unusual_charge'
+    | 'duplicate_charge'
+    | 'subscription_increase'
+    | 'pace_warning'
+    | 'bill_spike'
+    | 'subscription_renewal'
+  severity: 'low' | 'medium' | 'high'
+  title: string
+  body: string
+  merchant_normalized: string | null
+  amount: number | string | null
+  reasoning: Record<string, unknown> | null
+  created_at: string
+  read_at: string | null
+  is_dismissed: boolean
+}
+
+export type AlertSeverityFilter = 'all' | AlertRow['severity']
+export type AlertTypeFilter = 'all' | AlertRow['alert_type']
+
+export type AlertFeedbackRow = {
+  alert_type: AlertRow['alert_type']
+  merchant_canonical: string
+  is_expected: boolean
+  created_at: string
+}
+
+export type AlertFeedback = {
+  isExpected: boolean
+  createdAt: string
+}
+
+export type AlertFeedbackMap = Record<string, AlertFeedback>
