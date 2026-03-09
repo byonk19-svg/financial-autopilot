@@ -4,6 +4,8 @@ dist
 .DS_Store
 !apps/web/.env.example
 .claude/
+.agents/
+skills-lock.json
 dev-err.log
 dev-out.log
 .auth/
