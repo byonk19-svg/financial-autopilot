@@ -308,3 +308,62 @@ export type AlertFeedback = {
 }
 
 export type AlertFeedbackMap = Record<string, AlertFeedback>
+
+// --- Transaction feature types ---
+
+export type SortColumn = 'posted_at' | 'amount' | 'merchant_normalized'
+export type SortDirection = 'asc' | 'desc'
+export type TransactionViewPreset = 'all' | 'elaine_income' | 'household_bills' | 'brianna_savings'
+export type RuleMatchType = 'equals' | 'contains'
+export type RuleApplyScope = 'future_only' | 'past_90_days' | 'all_history'
+
+export type TransactionSplitRow = {
+  id: string
+  transaction_id: string
+  category_id: string | null
+  amount: number | string
+  memo: string | null
+}
+
+export type TransactionSplitDraftLine = {
+  draft_id: string
+  id?: string
+  category_id: string | null
+  amount_input: string
+  memo: string
+}
+
+export type CreateRuleFormState = {
+  canonicalMerchant: string
+  matchType: RuleMatchType
+  constrainToAccount: boolean
+  categoryId: string
+  applyScope: RuleApplyScope
+}
+
+export type CategoryFollowUpAction = 'apply_similar' | 'apply_and_rule' | null
+
+export type CategoryFollowUpPromptState = {
+  transactionId: string
+  merchantCanonical: string
+  accountId: string
+  categoryId: string
+  categoryName: string
+  includeAccountScope: boolean
+  pendingAction: CategoryFollowUpAction
+}
+
+export type HideFollowUpState = {
+  transactionId: string
+  merchantCanonical: string
+  accountId: string
+  includeAccountScope: boolean
+  pending: boolean
+}
+
+export type TransactionToast = {
+  id: number
+  message: string
+  tone: 'error' | 'info'
+  link?: { href: string; label: string }
+}
