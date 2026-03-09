@@ -242,7 +242,7 @@ export default function Dashboard() {
 
   return (
     <section
-      className="mx-auto w-full max-w-7xl space-y-6 lg:space-y-7"
+      className="w-full max-w-[1400px] space-y-7 lg:space-y-8"
       aria-busy={syncing || healthLoading}
     >
       <DashboardHeader
@@ -264,16 +264,19 @@ export default function Dashboard() {
       />
 
       <section
-        className="grid gap-6 md:grid-cols-2"
+        className="grid gap-5 md:grid-cols-2 xl:gap-6"
         aria-label="Shift, savings, and renewal details"
       >
-        <Card className="md:col-span-2">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base font-semibold">
+        <Card className="md:col-span-2 motion-fade-up motion-stagger-2">
+          <CardHeader className="pb-4 sm:pb-5">
+            <CardTitle className="text-base font-semibold tracking-tight sm:text-lg">
               {shiftSummary
                 ? `Week of ${safeDateLabel(shiftSummary.week_start, "MMM d")} - ${toNumber(shiftSummary.total_hours).toFixed(2)} hrs - ${formatCurrency(shiftSummary.total_gross_pay)}`
                 : "This Week's Shifts"}
             </CardTitle>
+            <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+              Logged shifts and employer pay distribution
+            </p>
           </CardHeader>
           <CardContent className="space-y-4">
             {shiftLoading ? (
@@ -290,42 +293,44 @@ export default function Dashboard() {
                 description="As shifts are added, weekly totals and employer breakdown will appear here."
               />
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Employer</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead className="text-right">Hours</TableHead>
-                    <TableHead className="text-right">Gross Pay</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {shiftRows.map((shift) => (
-                    <TableRow key={shift.shift_id}>
-                      <TableCell>
-                        {safeDateLabel(shift.shift_date, "MMM d")}
-                      </TableCell>
-                      <TableCell>{shift.employer_name}</TableCell>
-                      <TableCell>{shift.location_name || "--"}</TableCell>
-                      <TableCell className="text-right">
-                        {toNumber(shift.hours_worked).toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(shift.gross_pay)}
-                      </TableCell>
-                      <TableCell className="capitalize">
-                        {shift.status}
-                      </TableCell>
+              <div className="overflow-x-auto rounded-xl border border-border/80 bg-background/35">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Employer</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead className="text-right">Hours</TableHead>
+                      <TableHead className="text-right">Gross Pay</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {shiftRows.map((shift) => (
+                      <TableRow key={shift.shift_id}>
+                        <TableCell>
+                          {safeDateLabel(shift.shift_date, "MMM d")}
+                        </TableCell>
+                        <TableCell>{shift.employer_name}</TableCell>
+                        <TableCell>{shift.location_name || "--"}</TableCell>
+                        <TableCell className="text-right">
+                          {toNumber(shift.hours_worked).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(shift.gross_pay)}
+                        </TableCell>
+                        <TableCell className="capitalize">
+                          {shift.status}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
 
             {!shiftLoading && shiftBreakdown.length > 0 && (
-              <div className="space-y-3 border-t border-border pt-4">
+              <div className="space-y-3 border-t border-dashed border-border pt-4">
                 {shiftBreakdown.map((row) => {
                   const grossPay = toNumber(row.gross_pay);
                   const value =
@@ -352,7 +357,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="motion-fade-up motion-stagger-3">
           <CardHeader className="pb-4">
             <CardTitle className="text-base font-semibold">
               Savings Buckets
@@ -367,21 +372,18 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                <div className="rounded-lg bg-muted/40 p-3">
+                <div className="rounded-xl border border-border/75 bg-muted/40 p-3.5">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">
                     Total saved
                   </p>
                   <p className="text-2xl font-semibold text-foreground">
                     {formatCurrency(savingsSummary?.total_saved)}
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Brianna:{" "}
-                    {formatCurrency(savingsSummary?.total_by_owner?.brianna)} -
-                    Elaine:{" "}
-                    {formatCurrency(savingsSummary?.total_by_owner?.elaine)} -
-                    Household:{" "}
-                    {formatCurrency(savingsSummary?.total_by_owner?.household)}
-                  </p>
+                  <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
+                    <p>Brianna: {formatCurrency(savingsSummary?.total_by_owner?.brianna)}</p>
+                    <p>Elaine: {formatCurrency(savingsSummary?.total_by_owner?.elaine)}</p>
+                    <p>Household: {formatCurrency(savingsSummary?.total_by_owner?.household)}</p>
+                  </div>
                 </div>
 
                 {savingsBuckets.length === 0 ? (
@@ -401,7 +403,7 @@ export default function Dashboard() {
                       return (
                         <div
                           key={bucket.bucket_id}
-                          className="space-y-2 rounded-lg border border-border p-3"
+                          className="space-y-2 rounded-xl border border-border/85 bg-background/35 p-3 transition-colors duration-150 hover:bg-background/60"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="font-medium text-foreground">
@@ -433,7 +435,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="motion-fade-up motion-stagger-4">
           <CardHeader className="pb-4">
             <CardTitle className="text-base font-semibold">
               Upcoming Renewals
@@ -452,7 +454,7 @@ export default function Dashboard() {
                 {upcomingRenewals.map((renewal) => (
                   <li
                     key={renewal.subscription_id}
-                    className="rounded-lg border border-border p-3"
+                    className="rounded-xl border border-border/85 bg-background/35 p-3 transition-colors duration-150 hover:bg-background/65"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-medium text-foreground">
@@ -475,7 +477,7 @@ export default function Dashboard() {
       </section>
 
       <section
-        className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]"
+        className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:gap-7"
         aria-labelledby="dashboard-content-heading"
       >
         <h2 id="dashboard-content-heading" className="sr-only">
@@ -490,7 +492,7 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <aside className="space-y-4" aria-label="Dashboard sidebar">
+        <aside className="space-y-4 lg:sticky lg:top-[5.4rem] lg:self-start" aria-label="Dashboard sidebar">
           <DashboardSystemHealthCard
             healthLoading={healthLoading}
             healthError={healthError}

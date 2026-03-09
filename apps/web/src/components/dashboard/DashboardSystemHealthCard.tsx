@@ -24,16 +24,16 @@ function formatStatusLabel(status: string | null): string {
 function statusBadgeClass(status: string | null): string {
   const normalized = (status ?? "").toLowerCase();
   if (normalized.includes("succeeded")) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-[hsl(var(--success)/0.35)] bg-[hsl(var(--success)/0.12)] text-[hsl(var(--success))]";
   }
   if (normalized.includes("running")) {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.14)] text-[hsl(var(--warning))]";
   }
   if (normalized.includes("failed") || normalized.includes("error")) {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.1)] text-[hsl(var(--destructive))]";
   }
   if (normalized.includes("missing") || normalized.includes("unavailable")) {
-    return "border-rose-200 bg-rose-50 text-rose-700";
+    return "border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.1)] text-[hsl(var(--destructive))]";
   }
   return "border-border bg-muted text-muted-foreground";
 }
@@ -46,10 +46,12 @@ export function DashboardSystemHealthCard({
   lastAnalysisAt,
   lastWeeklyInsightsAt,
 }: DashboardSystemHealthCardProps) {
+  const latestError = systemHealth?.latest_error?.trim();
+
   return (
-    <Card aria-labelledby="system-health-heading" className="border border-border/80 bg-card/95">
+    <Card aria-labelledby="system-health-heading" className="border border-[hsl(var(--primary)/0.28)] bg-[hsl(var(--primary)/0.06)] shadow-[0_18px_34px_-28px_hsl(var(--foreground)/0.5)] motion-fade-up motion-stagger-3">
       <section>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 sm:pb-4">
           <CardTitle
             id="system-health-heading"
             className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
@@ -58,7 +60,7 @@ export function DashboardSystemHealthCard({
             System Health
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 pt-0">
+        <CardContent className="space-y-3.5 pt-0">
           {healthLoading ? (
             <div className="space-y-3" aria-live="polite" aria-busy="true">
               <Skeleton className="h-4 w-3/4" />
@@ -94,16 +96,18 @@ export function DashboardSystemHealthCard({
                 </div>
               </dl>
 
-              <div className="rounded-xl border border-border bg-muted/25 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Latest Error
-                </p>
-                <p className="mt-1 text-sm text-foreground">
-                  {systemHealth?.latest_error ?? "None"}
-                </p>
-              </div>
+              {latestError && (
+                <div className="rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Latest Error
+                  </p>
+                  <p className="mt-1 text-sm text-foreground">
+                    {latestError}
+                  </p>
+                </div>
+              )}
 
-              <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+              <div className="space-y-2 rounded-xl border border-[hsl(var(--primary)/0.26)] bg-[hsl(var(--primary)/0.08)] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <ActivityIcon className="h-3.5 w-3.5 text-primary/75" />
@@ -119,7 +123,7 @@ export function DashboardSystemHealthCard({
                     {systemHealth.jobs.map((job) => (
                       <div
                         key={job.job_name}
-                        className="space-y-1.5 rounded-lg border border-border bg-card px-2.5 py-2"
+                        className="space-y-1.5 rounded-lg border border-border bg-card px-2.5 py-2 transition-colors duration-150 hover:bg-background/80"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-sm font-medium text-foreground">
@@ -145,7 +149,7 @@ export function DashboardSystemHealthCard({
                           </p>
                         </div>
                         {job.last_error && (
-                          <p className="text-xs text-rose-700">
+                          <p className="text-xs text-[hsl(var(--destructive))]">
                             Error: {job.last_error}
                           </p>
                         )}
@@ -164,7 +168,7 @@ export function DashboardSystemHealthCard({
 
               {healthError && (
                 <div
-                  className="rounded-lg border border-red-200 bg-red-50/80 px-3 py-2 text-sm text-red-700"
+                  className="rounded-lg border border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.1)] px-3 py-2 text-sm text-[hsl(var(--destructive))]"
                   role="alert"
                   aria-live="polite"
                 >

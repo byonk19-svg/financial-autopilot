@@ -29,8 +29,8 @@ function toPercent(value: number | null): string {
 }
 
 function toneForDelta(value: number): string {
-  if (value > 0) return "text-rose-700";
-  if (value < 0) return "text-emerald-700";
+  if (value > 0) return "text-[hsl(var(--destructive))]";
+  if (value < 0) return "text-[hsl(var(--success))]";
   return "text-muted-foreground";
 }
 
@@ -41,22 +41,22 @@ export function DashboardStatsGrid({
   renewalMonthlyTotal,
 }: DashboardStatsGridProps) {
   const kpiCardClass =
-    "border border-border/80 bg-card/95 shadow-[0_14px_34px_-26px_hsl(var(--foreground)/0.45)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-24px_hsl(var(--foreground)/0.5)]"
+    "group border border-border/80 bg-card/95 shadow-[0_14px_34px_-26px_hsl(var(--foreground)/0.45)] transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_20px_38px_-24px_hsl(var(--foreground)/0.5)]"
 
   return (
     <section
       className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
       aria-label="Dashboard KPI cards"
     >
-      <Card className={kpiCardClass}>
-        <CardContent className="p-5">
+      <Card className={`${kpiCardClass} border-[hsl(var(--success)/0.35)] bg-[hsl(var(--success)/0.08)] motion-fade-up motion-stagger-1`}>
+        <CardContent className="p-5 sm:p-6">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Cash Flow MTD
             </p>
-            <DollarIcon className="h-5 w-5 text-primary/80" />
+            <DollarIcon className="h-5 w-5 text-[hsl(var(--success))]" />
           </div>
-          <p className="mt-2 text-2xl font-semibold text-foreground">
+          <p className="mt-2 text-[clamp(1.35rem,2.4vw,1.7rem)] font-semibold text-foreground">
             {toCurrency(kpis.cashFlowMtd)}
           </p>
           <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -82,15 +82,15 @@ export function DashboardStatsGrid({
         </CardContent>
       </Card>
 
-      <Card className={kpiCardClass}>
-        <CardContent className="p-5">
+      <Card className={`${kpiCardClass} border-[hsl(var(--primary)/0.34)] bg-[hsl(var(--primary)/0.08)] motion-fade-up motion-stagger-2`}>
+        <CardContent className="p-5 sm:p-6">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Spend vs Last Month
             </p>
-            <WalletIcon className="h-5 w-5 text-primary/80" />
+            <WalletIcon className="h-5 w-5 text-primary" />
           </div>
-          <p className="mt-2 text-2xl font-semibold text-foreground">
+          <p className="mt-2 text-[clamp(1.35rem,2.4vw,1.7rem)] font-semibold text-foreground">
             {toCurrency(kpis.spendMtd)}
           </p>
           <p
@@ -105,13 +105,13 @@ export function DashboardStatsGrid({
         </CardContent>
       </Card>
 
-      <Card className={kpiCardClass}>
-        <CardContent className="p-5">
+      <Card className={`${kpiCardClass} border-[hsl(var(--chart-3)/0.34)] bg-[hsl(var(--chart-3)/0.08)] motion-fade-up motion-stagger-3`}>
+        <CardContent className="p-5 sm:p-6">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Top Categories MTD
             </p>
-            <ChevronRightIcon className="h-5 w-5 text-primary/70" />
+            <ChevronRightIcon className="h-5 w-5 text-[hsl(var(--chart-3))]" />
           </div>
           {kpis.topCategories.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">
@@ -124,7 +124,11 @@ export function DashboardStatsGrid({
                   key={row.category}
                   className="flex items-center justify-between gap-2 text-sm"
                 >
-                  <span className="truncate text-foreground">
+                  <span className="inline-flex min-w-0 items-center gap-2 truncate text-foreground">
+                    <span
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--chart-2))]"
+                    />
                     {row.category}
                   </span>
                   <span className="font-medium text-muted-foreground">
@@ -137,15 +141,15 @@ export function DashboardStatsGrid({
         </CardContent>
       </Card>
 
-      <Card className={kpiCardClass}>
-        <CardContent className="p-5">
+      <Card className={`${kpiCardClass} border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.09)] motion-fade-up motion-stagger-4`}>
+        <CardContent className="p-5 sm:p-6">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Upcoming Renewals (14d)
             </p>
-            <CalendarIcon className="h-5 w-5 text-primary/80" />
+            <CalendarIcon className="h-5 w-5 text-[hsl(var(--warning))]" />
           </div>
-          <p className="mt-2 text-2xl font-semibold text-foreground">
+          <p className="mt-2 text-[clamp(1.35rem,2.4vw,1.7rem)] font-semibold text-foreground">
             {upcomingRenewals.length}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -155,7 +159,7 @@ export function DashboardStatsGrid({
             {upcomingRenewals.slice(0, 3).map((row) => (
               <li
                 key={row.subscription_id}
-                className="flex items-center justify-between gap-2 text-sm"
+                className="flex items-center justify-between gap-2 rounded-lg border border-transparent px-2 py-1.5 text-sm transition-colors group-hover:border-[hsl(var(--warning)/0.24)] group-hover:bg-[hsl(var(--warning)/0.1)]"
               >
                 <span className="truncate text-foreground">
                   {row.merchant_normalized}
@@ -177,13 +181,13 @@ export function DashboardStatsGrid({
         </CardContent>
       </Card>
 
-      <Card className={`${kpiCardClass} md:col-span-2 xl:col-span-2`}>
-        <CardContent className="p-5">
+      <Card className={`${kpiCardClass} border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.08)] md:col-span-2 xl:col-span-2 motion-fade-up motion-stagger-5`}>
+        <CardContent className="p-5 sm:p-6">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Unusual Charges
             </p>
-            <AlertTriangleIcon className="h-5 w-5 text-rose-500" />
+            <AlertTriangleIcon className="h-5 w-5 text-destructive" />
           </div>
           {anomalies.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">
@@ -194,13 +198,13 @@ export function DashboardStatsGrid({
               {anomalies.slice(0, 5).map((row) => (
                 <li
                   key={row.transaction_id}
-                  className="rounded-lg border border-border bg-muted/30 px-3 py-2"
+                  className="rounded-lg border border-[hsl(var(--destructive)/0.22)] bg-[hsl(var(--destructive)/0.06)] px-3 py-2"
                 >
                   <div className="flex items-center justify-between gap-2 text-sm">
                     <span className="truncate font-medium text-foreground">
                       {row.merchant_canonical}
                     </span>
-                    <span className="text-rose-700">
+                    <span className="text-[hsl(var(--destructive))]">
                       {toCurrency(toNumber(row.amount))}
                     </span>
                   </div>

@@ -1,59 +1,112 @@
-import { useState } from 'react'
+import type { LucideIcon } from 'lucide-react'
+import {
+  ActivitySquare,
+  ArrowLeftRight,
+  Bell,
+  CalendarClock,
+  Gauge,
+  Landmark,
+  LogIn,
+  LogOut,
+  Menu,
+  Search,
+  Settings as SettingsIcon,
+  Sparkles,
+  Workflow,
+  X,
+} from 'lucide-react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
-import Alerts from './pages/Alerts'
-import CashFlow from './pages/CashFlow'
-import ClassificationRules from './pages/ClassificationRules'
-import Connect from './pages/Connect'
-import Dashboard from './pages/Dashboard'
-import Home from './pages/Home'
-import Login from './pages/Login'
-import Overview from './pages/Overview'
-import Rules from './pages/Rules'
-import Settings from './pages/Settings'
-import ShiftLog from './pages/ShiftLog'
-import Subscriptions from './pages/Subscriptions'
-import Transactions from './pages/Transactions'
 import { captureException } from './lib/errorReporting'
 import { useSession } from './lib/session'
 import { supabase } from './lib/supabase'
 
-type NavItem = { to: string; label: string }
+const loadDashboardPage = () => import('./pages/Dashboard')
+const loadHomePage = () => import('./pages/Home')
+const loadLoginPage = () => import('./pages/Login')
+const loadConnectPage = () => import('./pages/Connect')
+const loadSubscriptionsPage = () => import('./pages/Subscriptions')
+const loadClassificationRulesPage = () => import('./pages/ClassificationRules')
+const loadAlertsPage = () => import('./pages/Alerts')
+const loadOverviewPage = () => import('./pages/Overview')
+const loadTransactionsPage = () => import('./pages/Transactions')
+const loadCashFlowPage = () => import('./pages/CashFlow')
+const loadShiftLogPage = () => import('./pages/ShiftLog')
+const loadRulesPage = () => import('./pages/Rules')
+const loadSettingsPage = () => import('./pages/Settings')
+
+const DashboardPage = lazy(loadDashboardPage)
+const HomePage = lazy(loadHomePage)
+const LoginPage = lazy(loadLoginPage)
+const ConnectPage = lazy(loadConnectPage)
+const SubscriptionsPage = lazy(loadSubscriptionsPage)
+const ClassificationRulesPage = lazy(loadClassificationRulesPage)
+const AlertsPage = lazy(loadAlertsPage)
+const OverviewPage = lazy(loadOverviewPage)
+const TransactionsPage = lazy(loadTransactionsPage)
+const CashFlowPage = lazy(loadCashFlowPage)
+const ShiftLogPage = lazy(loadShiftLogPage)
+const RulesPage = lazy(loadRulesPage)
+const SettingsPage = lazy(loadSettingsPage)
+
+type NavItem = { to: string; label: string; icon: LucideIcon; preload?: () => Promise<unknown> }
 type NavGroup = { label: string; items: NavItem[] }
 
 const navGroups: NavGroup[] = [
   {
-    label: 'Main',
+    label: 'Overview',
     items: [
-      { to: '/', label: 'Dashboard' },
-      { to: '/transactions', label: 'Transactions' },
-      { to: '/cash-flow', label: 'Cash Flow' },
-      { to: '/overview', label: 'Accounts' },
+      { to: '/', label: 'Dashboard', icon: Gauge, preload: loadDashboardPage },
+      { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight, preload: loadTransactionsPage },
+      { to: '/cash-flow', label: 'Cash Flow', icon: ActivitySquare, preload: loadCashFlowPage },
+      { to: '/overview', label: 'Accounts', icon: Landmark, preload: loadOverviewPage },
     ],
   },
   {
     label: 'Automation',
     items: [
-      { to: '/subscriptions', label: 'Recurring' },
-      { to: '/alerts', label: 'Alerts' },
+      { to: '/subscriptions', label: 'Recurring', icon: CalendarClock, preload: loadSubscriptionsPage },
+      { to: '/alerts', label: 'Alerts', icon: Bell, preload: loadAlertsPage },
     ],
   },
   {
     label: 'Config',
     items: [
-      { to: '/rules', label: 'Rules' },
-      { to: '/classification-rules', label: 'Recurring Rules' },
-      { to: '/shift-log', label: 'Shift Log' },
-      { to: '/settings', label: 'Settings' },
+      { to: '/rules', label: 'Rules', icon: Workflow, preload: loadRulesPage },
+      { to: '/classification-rules', label: 'Recurring Rules', icon: Sparkles, preload: loadClassificationRulesPage },
+      { to: '/shift-log', label: 'Shift Log', icon: CalendarClock, preload: loadShiftLogPage },
+      { to: '/settings', label: 'Settings', icon: SettingsIcon, preload: loadSettingsPage },
     ],
   },
 ]
+
+function RouteLoadingFallback() {
+  return (
+    <section className="panel-soft mx-auto max-w-5xl border-border/75 bg-card/92 p-6 sm:p-7 motion-fade-up" aria-busy="true" aria-live="polite">
+      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Loading view</p>
+      <div className="mt-3 space-y-3">
+        <div className="h-3 w-1/3 rounded bg-muted/70" />
+        <div className="h-10 w-full rounded-xl bg-muted/75" />
+        <div className="h-10 w-full rounded-xl bg-muted/65" />
+        <div className="h-10 w-4/5 rounded-xl bg-muted/55" />
+      </div>
+    </section>
+  )
+}
 
 export default function App() {
   const location = useLocation()
   const { session } = useSession()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [navSearch, setNavSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const navItems = navGroups.flatMap((group) => group.items)
+  const monthLabel = useMemo(
+    () => new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date()),
+    [],
+  )
 
   const onSignOut = async () => {
     try {
@@ -79,159 +132,299 @@ export default function App() {
   )
 
   const navItemClass = (to: string): string =>
-    `inline-flex rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors-fast ${
+    `group inline-flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background md:min-h-9 md:py-1.5 ${
       isActive(to)
-        ? 'bg-primary text-primary-foreground shadow-[0_10px_24px_-14px_hsl(var(--primary)/0.9)]'
-        : 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'
+        ? 'bg-primary text-primary-foreground shadow-[0_16px_30px_-18px_hsl(var(--primary)/0.94)]'
+        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
     }`
 
   const onNavClick = () => {
     setMobileNavOpen(false)
+    setNavSearch('')
+    setSearchOpen(false)
   }
+  const preloadRoute = useCallback((item: NavItem) => {
+    void item.preload?.()
+  }, [])
+
+  const filteredNavItems = navItems.filter((item) =>
+    item.label.toLowerCase().includes(navSearch.trim().toLowerCase()),
+  )
+  const showSearchResults = searchOpen && navSearch.trim().length > 0
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const activeTag = (document.activeElement as HTMLElement | null)?.tagName
+      const inTextInput = activeTag === 'INPUT' || activeTag === 'TEXTAREA'
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setSearchOpen(true)
+        searchInputRef.current?.focus()
+      }
+      if (event.key === '/' && !inTextInput) {
+        event.preventDefault()
+        setSearchOpen(true)
+        searchInputRef.current?.focus()
+      }
+      if (event.key === 'Escape') {
+        setSearchOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  const renderNavGroup = (group: NavGroup) => (
+    <section key={group.label}>
+      <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{group.label}</p>
+      <div className="space-y-1">
+        {group.items.map((item) => {
+          const Icon = item.icon
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              onClick={onNavClick}
+              onMouseEnter={() => preloadRoute(item)}
+              onFocus={() => preloadRoute(item)}
+              className={navItemClass(item.to)}
+              aria-current={isActive(item.to) ? 'page' : undefined}
+            >
+              <Icon className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-105" />
+              <span className="truncate">{item.label}</span>
+            </Link>
+          )
+        })}
+      </div>
+    </section>
+  )
 
   return (
-    <div className="relative min-h-screen text-foreground">
-      <div className="app-grid-bg pointer-events-none fixed inset-0 -z-10 opacity-[0.12]" aria-hidden="true" />
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-4 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <Link to="/" onClick={onNavClick} className="inline-flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_22px_-12px_hsl(var(--primary)/0.9)]">
-                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                  <path
-                    d="M12 4V20M16 7.5C16 6.12 14.21 5 12 5C9.79 5 8 6.12 8 7.5C8 8.88 9.79 10 12 10C14.21 10 16 11.12 16 12.5C16 13.88 14.21 15 12 15C9.79 15 8 13.88 8 12.5"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+    <div className="relative min-h-screen overflow-x-clip text-foreground">
+      <a
+        href="#main-content"
+        className="sr-only z-50 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground focus:not-sr-only focus:absolute focus:left-3 focus:top-3"
+      >
+        Skip to main content
+      </a>
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div className="app-grid-bg absolute inset-0 opacity-[0.34]" />
+        <div className="app-orb app-orb--primary" />
+        <div className="app-orb app-orb--accent" />
+      </div>
+      <div className="mx-auto flex w-full max-w-[1540px] gap-3 px-3 py-3 sm:gap-4 sm:px-4 lg:gap-6 lg:px-6">
+        <aside className="hidden xl:block xl:w-72 xl:shrink-0">
+          <div className="panel-soft sticky top-3 flex h-[calc(100vh-1.5rem)] flex-col overflow-hidden border-border/80 bg-card/92 p-3">
+            <Link to="/" onClick={onNavClick} className="inline-flex items-center gap-3 rounded-2xl px-2 py-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_14px_24px_-14px_hsl(var(--primary)/0.9)]">
+                <span className="font-extrabold tracking-wide">FA</span>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-extrabold leading-none text-foreground sm:text-base">Financial Autopilot</p>
-                <p className="mt-1 hidden text-[11px] font-medium text-muted-foreground sm:block">
-                  Professional household finance cockpit
-                </p>
+                <p className="truncate text-sm font-extrabold leading-none text-foreground">Financial Autopilot</p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Family finance hub</p>
               </div>
             </Link>
 
-            <div className="hidden min-w-0 xl:block">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Workspace</p>
-              <p className="truncate text-sm font-semibold text-foreground">{currentPageLabel}</p>
-            </div>
-
-            <nav className="hidden items-center gap-2 xl:flex" aria-label="Primary">
-              {navGroups.map((group, index) => (
-                <div key={group.label} className="flex items-center">
-                  {index > 0 && <div className="mx-1 h-5 w-px bg-border/80" aria-hidden="true" />}
-                  <div className="glass-panel flex items-center gap-1 rounded-xl px-2 py-1">
-                    <span className="px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                      {group.label}
-                    </span>
-                    {group.items.map((item) => (
-                      <Link key={item.to} to={item.to} className={navItemClass(item.to)}>
-                        {item.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <nav className="mt-4 flex-1 space-y-5 overflow-y-auto pr-1" aria-label="Sidebar navigation">
+              {navGroups.map((group) => renderNavGroup(group))}
             </nav>
+
+            <div className="mt-3 border-t border-border/85 pt-3">
+              {session ? (
+                <button
+                  onClick={onSignOut}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background/70 px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background/70 px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground"
+                >
+                  <LogIn className="h-4 w-4" />
+                  Log in
+                </Link>
+              )}
+            </div>
           </div>
+        </aside>
 
-          <div className="flex items-center gap-2">
-            {!session && (
-              <Link
-                to="/login"
-                className="hidden rounded-lg border border-border bg-card/90 px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent/70 hover:text-foreground sm:inline-flex"
-              >
-                Log in
-              </Link>
-            )}
-            {session && (
-              <button
-                onClick={onSignOut}
-                className="hidden rounded-lg border border-border bg-card/90 px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent/70 hover:text-foreground sm:inline-flex"
-              >
-                Sign out
-              </button>
-            )}
+        <div className="min-w-0 flex-1">
+          <header className="sticky top-3 z-40 motion-fade-in">
+            <div className="panel-soft relative border-border/85 bg-background/78 p-2 backdrop-blur-xl sm:p-3">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" aria-hidden="true" />
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card/90 text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground xl:hidden"
+                  onClick={() => setMobileNavOpen((current) => !current)}
+                  aria-label="Toggle navigation menu"
+                  aria-expanded={mobileNavOpen}
+                  aria-controls="mobile-navigation"
+                >
+                  {mobileNavOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                </button>
 
-            <button
-              type="button"
-              className="inline-flex items-center rounded-lg border border-border bg-card/90 px-2.5 py-1.5 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent/70 hover:text-foreground xl:hidden"
-              onClick={() => setMobileNavOpen((current) => !current)}
-              aria-label="Toggle navigation menu"
-              aria-expanded={mobileNavOpen}
-            >
-              {mobileNavOpen ? 'Close' : 'Menu'}
-            </button>
-          </div>
-        </div>
+                <div className="hidden min-w-0 sm:block">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{monthLabel}</p>
+                  <p className="truncate text-sm font-semibold text-foreground">{currentPageLabel}</p>
+                </div>
 
-        {mobileNavOpen && (
-          <div className="border-t border-border/80 bg-background/95 xl:hidden">
-            <nav className="mx-auto max-w-[1280px] space-y-4 px-4 py-3 sm:px-6 sm:py-4 lg:px-8" aria-label="Mobile navigation">
-              {navGroups.map((group) => (
-                <section key={group.label}>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">{group.label}</p>
-                  <div className="glass-panel flex flex-col gap-1 rounded-xl p-1.5">
-                    {group.items.map((item) => (
-                      <Link key={item.to} to={item.to} onClick={onNavClick} className={navItemClass(item.to)}>
-                        {item.label}
-                      </Link>
-                    ))}
+                <div className="relative min-w-[220px] flex-1 sm:min-w-[280px]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    ref={searchInputRef}
+                    value={navSearch}
+                    onChange={(event) => setNavSearch(event.target.value)}
+                    onFocus={() => setSearchOpen(true)}
+                    placeholder="Jump to a page..."
+                    className="h-11 w-full rounded-xl border border-border bg-card/92 pl-9 pr-20 text-sm font-medium text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-label="Search navigation pages"
+                  />
+                  <div className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-md border border-border bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground md:block">
+                    Ctrl K
                   </div>
-                </section>
-              ))}
 
-              <div className="border-t border-border pt-3">
+                  {showSearchResults && (
+                    <div className="absolute left-0 right-0 top-[calc(100%+0.45rem)] z-50 rounded-xl border border-border bg-card p-2 shadow-[0_22px_48px_-24px_hsl(var(--foreground)/0.45)] motion-nav-enter">
+                      {filteredNavItems.length === 0 ? (
+                        <p className="px-2 py-2 text-sm text-muted-foreground">No pages match "{navSearch}".</p>
+                      ) : (
+                        <ul className="space-y-1" role="listbox" aria-label="Navigation search results">
+                          {filteredNavItems.map((item) => {
+                            const Icon = item.icon
+                            return (
+                              <li key={item.to}>
+                                <Link
+                                  to={item.to}
+                                  onClick={onNavClick}
+                                  onMouseEnter={() => preloadRoute(item)}
+                                  onFocus={() => preloadRoute(item)}
+                                  className="inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground"
+                                >
+                                  <span className="inline-flex items-center gap-2">
+                                    <Icon className="h-4 w-4 shrink-0" />
+                                    {item.label}
+                                  </span>
+                                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">{item.to}</span>
+                                </Link>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card/90 text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground"
+                  aria-label="View alerts"
+                >
+                  <Bell className="h-4 w-4" />
+                </button>
+
                 {session ? (
                   <button
-                    onClick={async () => {
-                      setMobileNavOpen(false)
-                      await onSignOut()
-                    }}
-                    className="inline-flex w-full rounded-lg border border-border bg-card/90 px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent/70 hover:text-foreground"
+                    onClick={onSignOut}
+                    className="hidden min-h-11 items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground xl:inline-flex"
                   >
+                    <LogOut className="h-4 w-4" />
                     Sign out
                   </button>
                 ) : (
                   <Link
                     to="/login"
-                    onClick={onNavClick}
-                    className="inline-flex w-full rounded-lg border border-border bg-card/90 px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent/70 hover:text-foreground"
+                    className="hidden min-h-11 items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground xl:inline-flex"
                   >
+                    <LogIn className="h-4 w-4" />
                     Log in
                   </Link>
                 )}
               </div>
-            </nav>
-          </div>
-        )}
-      </header>
+            </div>
+          </header>
 
-      <main className="mx-auto w-full max-w-[1280px] px-4 pb-10 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-        <ErrorBoundary>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/home" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/connect" element={<Connect />} />
-            <Route path="/dashboard" element={<Navigate to="/" replace />} />
-            <Route path="/subscriptions" element={<Subscriptions />} />
-            <Route path="/classification-rules" element={<ClassificationRules />} />
-            <Route path="/alerts" element={<Alerts />} />
-            <Route path="/overview" element={<Overview />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/cash-flow" element={<CashFlow />} />
-            <Route path="/shift-log" element={<ShiftLog />} />
-            <Route path="/rules" element={<Rules />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </ErrorBoundary>
-      </main>
+          {mobileNavOpen && (
+            <div className="fixed inset-0 z-50 xl:hidden" aria-modal="true" role="dialog" aria-label="Mobile navigation">
+              <button
+                type="button"
+                aria-label="Close mobile navigation"
+                className="absolute inset-0 bg-foreground/35 backdrop-blur-[1px]"
+                onClick={() => setMobileNavOpen(false)}
+              />
+              <aside id="mobile-navigation" className="absolute left-0 top-0 h-full w-[84vw] max-w-[340px] border-r border-border bg-background/98 p-4 motion-nav-enter">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <Link to="/" onClick={onNavClick} className="inline-flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-extrabold text-primary-foreground">FA</div>
+                    <span className="text-sm font-extrabold text-foreground">Financial Autopilot</span>
+                  </Link>
+                  <button
+                    type="button"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card/90 text-muted-foreground"
+                    onClick={() => setMobileNavOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <nav className="space-y-5" aria-label="Mobile navigation links">
+                  {navGroups.map((group) => renderNavGroup(group))}
+                </nav>
+                <div className="mt-6 border-t border-border pt-4">
+                  {session ? (
+                    <button
+                      onClick={async () => {
+                        setMobileNavOpen(false)
+                        await onSignOut()
+                      }}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign out
+                    </button>
+                  ) : (
+                    <Link
+                      to="/login"
+                      onClick={onNavClick}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground"
+                    >
+                      <LogIn className="h-4 w-4" />
+                      Log in
+                    </Link>
+                  )}
+                </div>
+              </aside>
+            </div>
+          )}
+
+          <main id="main-content" tabIndex={-1} className="pb-10 pt-5 sm:pt-6 lg:pt-7 motion-page-enter">
+            <ErrorBoundary>
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <Routes>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/home" element={<HomePage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/connect" element={<ConnectPage />} />
+                  <Route path="/dashboard" element={<Navigate to="/" replace />} />
+                  <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                  <Route path="/classification-rules" element={<ClassificationRulesPage />} />
+                  <Route path="/alerts" element={<AlertsPage />} />
+                  <Route path="/overview" element={<OverviewPage />} />
+                  <Route path="/transactions" element={<TransactionsPage />} />
+                  <Route path="/cash-flow" element={<CashFlowPage />} />
+                  <Route path="/shift-log" element={<ShiftLogPage />} />
+                  <Route path="/rules" element={<RulesPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
+          </main>
+        </div>
+      </div>
     </div>
   )
 }

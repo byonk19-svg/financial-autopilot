@@ -28,7 +28,7 @@ financial-autopilot/
 |     |- hooks/                   # Page/feature-level custom hooks (8 hooks)
 |     |- lib/                     # Utilities, clients, formatters (14 modules)
 |- supabase/
-|  |- migrations/                 # SQL migrations (0001â€“0051, never edit old ones)
+|  |- migrations/                 # SQL migrations (0001â€”0053, never edit old ones)
 |  |- functions/                  # Edge Functions (Deno)
 |     |- _shared/                 # Shared Deno utilities
 |     |- simplefin-sync/          # Bank account + transaction sync
@@ -63,21 +63,22 @@ From repo root:
 
 ```bash
 npm install
-npm run dev
+npm run dev                                                    # starts SPA on 127.0.0.1:5174 (same as line below)
 npm --workspace apps/web run dev -- --host 127.0.0.1 --port 5174
 npm --workspace apps/web run build
 npm --workspace apps/web run lint
 npm run test:e2e
 npm run test:e2e:a11y
 npm run test:e2e:auth
+npm run test:unit       # Vitest: unit tests for shared edge function logic
 ```
 
-Supabase:
+Supabase (PowerShell — use `npx.cmd`, not bare `supabase`):
 
-```bash
-supabase db push
-supabase functions deploy <function-name>
-supabase secrets set KEY=VALUE
+```powershell
+npx.cmd supabase db push
+npx.cmd supabase functions deploy <function-name>
+npx.cmd supabase secrets set KEY=VALUE
 ```
 
 ## Windows + Supabase CLI Runbook
@@ -200,7 +201,7 @@ This is a credit-card-first household.
 ## Rule Engines (Both Exist — Do Not Conflate)
 
 1. `transaction_rules` (applied by `analysis-daily` job) — created via Transactions page UI ("Fix everywhere" button) or Rules page
-2. `transaction_category_rules_v1` (applied at sync time) — managed via Category Rules page
+2. `transaction_category_rules_v1` (applied at sync time) — no UI; manage directly in Supabase dashboard
 
 For ingestion-time automation, prefer `transaction_category_rules_v1`.
 Rules in `transaction_rules` apply on the next daily analysis run (or via "Run analysis now" on the Rules page).

@@ -42,7 +42,7 @@ function ListHeaderRow({
   const compact = density === 'compact'
   return (
     <div
-      className={`hidden rounded-lg border border-slate-200 bg-slate-50 font-semibold uppercase tracking-wide text-muted-foreground xl:grid xl:grid-cols-[minmax(0,2.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] xl:items-center xl:gap-3 ${
+      className={`hidden rounded-xl border border-border/80 bg-muted/35 font-semibold uppercase tracking-wide text-muted-foreground xl:grid xl:grid-cols-[minmax(0,2.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] xl:items-center xl:gap-3 ${
         compact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
       }`}
     >
@@ -116,6 +116,7 @@ export function SubscriptionSection({
   const compact = density === 'compact'
   const sectionSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-')
   const contentId = `subscription-section-${sectionSlug}`
+  const headingId = `${contentId}-heading`
   const toggleExpanded = useCallback(() => {
     setExpanded((current) => !current)
   }, [])
@@ -174,24 +175,24 @@ export function SubscriptionSection({
   }, [rows])
 
   return (
-    <Card className="overflow-hidden border-slate-200 shadow-sm" data-testid={`recurring-section-${sectionSlug}`}>
+    <Card className="overflow-hidden border-border/80 bg-card/95 shadow-[0_16px_40px_-28px_hsl(var(--foreground)/0.44)] motion-fade-up" data-testid={`recurring-section-${sectionSlug}`}>
       <button
         type="button"
         onClick={toggleExpanded}
         aria-expanded={expanded}
         aria-controls={contentId}
-        className={`flex w-full items-center justify-between gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? 'p-3' : 'p-3.5'}`}
+        className={`flex w-full items-center justify-between gap-3 text-left transition-colors-fast hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? 'p-3' : 'p-3.5'}`}
       >
         <div>
-          <h2 className={`font-semibold text-foreground ${compact ? 'text-base' : 'text-lg'}`}>{title}</h2>
+          <h2 id={headingId} className={`font-semibold text-foreground ${compact ? 'text-base' : 'text-lg'}`}>{title}</h2>
           <p className={`text-muted-foreground ${compact ? 'text-xs' : 'text-sm'}`}>{description}</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden text-right sm:block">
+          <div className="hidden rounded-lg border border-border/70 bg-muted/30 px-2.5 py-1 text-right sm:block">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Est. monthly</p>
             <p className={`font-semibold text-foreground ${compact ? 'text-xs' : 'text-sm'}`}>{toCurrency(monthlyEstimate)}</p>
           </div>
-          <div className="hidden text-right sm:block">
+          <div className="hidden rounded-lg border border-border/70 bg-muted/30 px-2.5 py-1 text-right sm:block">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Due in 7d</p>
             <p className={`font-semibold text-foreground ${compact ? 'text-xs' : 'text-sm'}`}>{dueSoonCount}</p>
           </div>
@@ -205,7 +206,12 @@ export function SubscriptionSection({
       </button>
 
       {expanded && (
-        <CardContent id={contentId} className={`border-t border-slate-200 ${compact ? 'p-2.5' : 'p-3'}`}>
+        <CardContent
+          id={contentId}
+          role="region"
+          aria-labelledby={headingId}
+          className={`border-t border-border/80 ${compact ? 'p-2.5' : 'p-3'}`}
+        >
           {rows.length === 0 ? (
             <p className={`text-muted-foreground ${compact ? 'text-xs' : 'text-sm'}`}>{emptyText}</p>
           ) : (
@@ -215,7 +221,7 @@ export function SubscriptionSection({
                 <div key={group.payer} className={compact ? 'space-y-1.5' : 'space-y-2'}>
                   {groupedRows.length > 1 && (
                     <div className="flex items-center justify-between px-1">
-                      <p className={`font-medium text-muted-foreground ${compact ? 'text-[11px]' : 'text-xs'}`}>
+                      <p className={`font-semibold uppercase tracking-[0.08em] text-muted-foreground ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
                         Paid by {payerLabel(group.payer)}
                       </p>
                       <Badge variant="outline" className={compact ? 'text-[10px]' : 'text-xs'}>
