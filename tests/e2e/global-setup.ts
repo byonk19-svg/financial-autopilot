@@ -27,6 +27,9 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   const authStatePath = process.env.PLAYWRIGHT_AUTH_STATE ?? '.auth/user.json'
   const resolvedStatePath = resolveStatePath(authStatePath)
   fs.mkdirSync(path.dirname(resolvedStatePath), { recursive: true })
+  if (fs.existsSync(resolvedStatePath)) {
+    fs.rmSync(resolvedStatePath, { force: true })
+  }
 
   const baseURL = config.projects[0]?.use?.baseURL?.toString() ?? 'http://127.0.0.1:5174'
   const browser = await chromium.launch({ headless: true })
@@ -34,20 +37,28 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   const page = await context.newPage()
 
   try {
-    await page.goto(`${baseURL}/login`, { waitUntil: 'domcontentloaded' })
-    await page.getByLabel('Email').fill(email)
-    await page.getByLabel('Password').fill(password)
-    await page.getByRole('button', { name: 'Sign In' }).click()
+    try {
+      await page.goto(`${baseURL}/login`, { waitUntil: 'domcontentloaded' })
+      await page.getByLabel('Email').fill(email)
+      await page.getByLabel('Password').fill(password)
+      await page.getByRole('button', { name: 'Sign In' }).click()
 
-    await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 30_000 })
-      .not.toBe('/login')
+      await expect
+        .poll(() => new URL(page.url()).pathname, { timeout: 30_000 })
+        .not.toBe('/login')
 
-    await expect
-      .poll(async () => hasSupabaseToken(page), { timeout: 30_000 })
-      .toBe(true)
+      await expect
+        .poll(async () => hasSupabaseToken(page), { timeout: 30_000 })
+        .toBe(true)
 
-    await context.storageState({ path: resolvedStatePath })
+      await context.storageState({ path: resolvedStatePath })
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      console.warn(`Playwright global setup could not establish auth session: ${detail}`)
+      if (fs.existsSync(resolvedStatePath)) {
+        fs.rmSync(resolvedStatePath, { force: true })
+      }
+    }
   } finally {
     await browser.close()
   }

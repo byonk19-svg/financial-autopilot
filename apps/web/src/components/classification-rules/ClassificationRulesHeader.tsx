@@ -10,6 +10,9 @@ export function ClassificationRulesHeader({ activeCount, totalCount }: Classific
       <p className="mt-2 text-sm text-muted-foreground">
         Rules that control how recurring charges are classified — whether a pattern is treated as a subscription, bill/loan, or transfer.
       </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        This page does not set spending categories. Use Auto Rules for sync-time spending categorization.
+      </p>
       <p className="mt-2 text-xs text-muted-foreground">
         {activeCount} active of {totalCount} total rules
       </p>

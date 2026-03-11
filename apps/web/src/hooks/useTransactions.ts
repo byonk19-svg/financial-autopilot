@@ -14,6 +14,7 @@ import type {
   CategoryFollowUpPromptState,
   CreateRuleFormState,
   HideFollowUpState,
+  OwnerValue,
   SortColumn,
   SortDirection,
   TransactionRow,
@@ -161,6 +162,22 @@ function createSplitDraftId(): string {
 function formatAmountInput(value: number): string {
   if (!Number.isFinite(value)) return '0.00'
   return value.toFixed(2)
+}
+
+function isDuplicateAutoRuleError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === '23505') return true
+  return (error.message ?? '').includes('uq_transaction_category_rules_v1_signature')
+}
+
+function isDuplicateOwnerAutoRuleError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === '23505') return true
+  return (error.message ?? '').includes('uq_transaction_owner_rules_v1_signature')
+}
+
+function isOwnerRuleTarget(owner: OwnerValue | undefined): owner is Exclude<OwnerValue, 'unknown'> {
+  return owner === 'brianna' || owner === 'elaine' || owner === 'household'
 }
 
 // ─── hook ─────────────────────────────────────────────────────────────────────
@@ -987,6 +1004,8 @@ export function useTransactions() {
     if (!session?.user || !categoryFollowUpPrompt || categoryFollowUpPrompt.pendingAction) return
 
     const prompt = categoryFollowUpPrompt
+    const merchantPattern = prompt.merchantCanonical.trim()
+    const sourceTransaction = transactions.find((transaction) => transaction.id === prompt.transactionId) ?? null
     setCategoryFollowUpPrompt((current) =>
       current ? { ...current, pendingAction: 'apply_and_rule' } : current,
     )
@@ -1026,6 +1045,55 @@ export function useTransactions() {
       return
     }
 
+    let syncRuleWarning = ''
+    let ownerRuleWarning = ''
+    if (merchantPattern.length > 0) {
+      const syncRuleType = prompt.includeAccountScope ? 'merchant_contains_account' : 'merchant_contains'
+      const { error: syncRuleError } = await supabase.from('transaction_category_rules_v1').insert({
+        user_id: session.user.id,
+        rule_type: syncRuleType,
+        merchant_pattern: merchantPattern,
+        account_id: prompt.includeAccountScope ? prompt.accountId : null,
+        min_amount: null,
+        max_amount: null,
+        category_id: prompt.categoryId,
+        is_active: true,
+      })
+
+      if (syncRuleError && !isDuplicateAutoRuleError(syncRuleError)) {
+        captureException(syncRuleError, {
+          component: 'Transactions',
+          action: 'create-sync-time-category-rule',
+          transaction_id: prompt.transactionId,
+        })
+        syncRuleWarning = ' Sync-time rule save failed; check Auto Rules.'
+      }
+
+      if (sourceTransaction && isOwnerRuleTarget(sourceTransaction.owner)) {
+        const { error: ownerRuleError } = await supabase.from('transaction_owner_rules_v1').insert({
+          user_id: session.user.id,
+          rule_type: syncRuleType,
+          merchant_pattern: merchantPattern,
+          account_id: prompt.includeAccountScope ? prompt.accountId : null,
+          min_amount: null,
+          max_amount: null,
+          set_owner: sourceTransaction.owner,
+          is_active: true,
+        })
+
+        if (ownerRuleError && !isDuplicateOwnerAutoRuleError(ownerRuleError)) {
+          captureException(ownerRuleError, {
+            component: 'Transactions',
+            action: 'create-sync-time-owner-rule',
+            transaction_id: prompt.transactionId,
+          })
+          ownerRuleWarning = ' Owner auto-rule save failed; check Auto Rules.'
+        }
+      }
+    } else {
+      syncRuleWarning = ' Sync-time rule skipped (missing merchant pattern).'
+    }
+
     fetchFunctionWithAuth('analysis-daily', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1040,12 +1108,12 @@ export function useTransactions() {
     setToast({
       id: Date.now(),
       tone: 'info',
-      message: `Applied "${prompt.categoryName}" to ${Number(applyResult.data ?? 0)} past transaction(s) and saved rule for future ones. Analysis running in background -`,
+      message: `Applied "${prompt.categoryName}" to ${Number(applyResult.data ?? 0)} past transaction(s) and saved future auto-categorization rules.${syncRuleWarning}${ownerRuleWarning} Analysis running in background -`,
       link: { href: '/subscriptions', label: 'check Recurring' },
     })
     setRefreshNonce((current) => current + 1)
     setCategoryFollowUpPrompt(null)
-  }, [categoryFollowUpPrompt, session])
+  }, [categoryFollowUpPrompt, session, transactions])
 
   // ── hide follow-up ────────────────────────────────────────────────────────
 

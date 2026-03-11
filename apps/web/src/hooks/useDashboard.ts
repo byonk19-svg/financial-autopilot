@@ -4,6 +4,7 @@ import { captureException } from '@/lib/errorReporting'
 import { AuthExpiredError, fetchFunctionWithAuth } from '@/lib/fetchWithAuth'
 import { toNumber } from '@/lib/subscriptionFormatters'
 import { supabase } from '@/lib/supabase'
+import type { SavingsBucketSummaryRpc, ShiftWeekSummaryRpc } from '@/lib/types'
 
 type DashboardKpisRpc = {
   income_mtd: number | string | null
@@ -84,6 +85,70 @@ export type DashboardKpis = {
   topCategories: DashboardTopCategory[]
 }
 
+export type DashboardAutopilotMetrics = {
+  autoCategorizedRatePct: number | null
+  autoCategorizedCount30d: number
+  totalEligibleCount30d: number
+  uncategorizedCount7d: number
+  manualFixes7d: number
+}
+
+type DashboardOwnerKey = 'brianna' | 'elaine' | 'household' | 'unknown'
+
+const OWNER_ROW_ORDER: DashboardOwnerKey[] = ['brianna', 'elaine', 'household', 'unknown']
+const OWNER_LABELS: Record<DashboardOwnerKey, string> = {
+  brianna: 'Brianna',
+  elaine: 'Elaine',
+  household: 'Household',
+  unknown: 'Unknown',
+}
+
+type DashboardOwnerAggregate = {
+  incomeMtd: number
+  spendMtd: number
+}
+
+type DashboardOwnerTxRow = {
+  owner: string | null
+  type: string | null
+  amount: number | string | null
+}
+
+export type DashboardOwnerResponsibilityRow = {
+  owner: DashboardOwnerKey
+  label: string
+  incomeMtd: number
+  spendMtd: number
+  cashFlowMtd: number
+  spendSharePct: number | null
+}
+
+export type DashboardOwnerResponsibility = {
+  rows: DashboardOwnerResponsibilityRow[]
+  totalIncomeMtd: number
+  totalSpendMtd: number
+}
+
+function normalizeOwner(owner: string | null): DashboardOwnerKey {
+  if (owner === 'brianna' || owner === 'elaine' || owner === 'household') return owner
+  return 'unknown'
+}
+
+function emptyOwnerResponsibility(): DashboardOwnerResponsibility {
+  return {
+    rows: OWNER_ROW_ORDER.filter((owner) => owner !== 'unknown').map((owner) => ({
+      owner,
+      label: OWNER_LABELS[owner],
+      incomeMtd: 0,
+      spendMtd: 0,
+      cashFlowMtd: 0,
+      spendSharePct: null,
+    })),
+    totalIncomeMtd: 0,
+    totalSpendMtd: 0,
+  }
+}
+
 function monthStartDate(): string {
   const now = new Date()
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0)).toISOString().slice(0, 10)
@@ -91,6 +156,18 @@ function monthStartDate(): string {
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+function tomorrowDate(): string {
+  const date = new Date()
+  date.setUTCDate(date.getUTCDate() + 1)
+  return date.toISOString().slice(0, 10)
+}
+
+function daysAgoIso(days: number): string {
+  const date = new Date()
+  date.setUTCDate(date.getUTCDate() - days)
+  return date.toISOString()
 }
 
 export function formatDateTime(input: string | null): string {
@@ -157,11 +234,27 @@ export function useDashboard(userId: string | undefined) {
     unreadAlerts: 0,
     unownedAccounts: 0,
   })
+  const [autopilotMetrics, setAutopilotMetrics] = useState<DashboardAutopilotMetrics>({
+    autoCategorizedRatePct: null,
+    autoCategorizedCount30d: 0,
+    totalEligibleCount30d: 0,
+    uncategorizedCount7d: 0,
+    manualFixes7d: 0,
+  })
+  const [ownerResponsibility, setOwnerResponsibility] = useState<DashboardOwnerResponsibility>(
+    emptyOwnerResponsibility(),
+  )
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
   const [syncNeedsReconnect, setSyncNeedsReconnect] = useState(false)
+
+  // supplemental: shift week + savings buckets (non-critical, loaded in parallel)
+  const [shiftSummary, setShiftSummary] = useState<ShiftWeekSummaryRpc | null>(null)
+  const [savingsSummary, setSavingsSummary] = useState<SavingsBucketSummaryRpc | null>(null)
+  const [shiftLoading, setShiftLoading] = useState(true)
+  const [savingsLoading, setSavingsLoading] = useState(true)
 
   const loadDashboardData = useCallback(async () => {
     if (!userId) return
@@ -177,6 +270,11 @@ export function useDashboard(userId: string | undefined) {
       reviewSubsResult,
       unreadAlertsResult,
       unownedAccountsResult,
+      totalEligibleAutoRateResult,
+      autoCategorizedResult,
+      uncategorizedLast7dResult,
+      manualFixesLast7dResult,
+      ownerTransactionsMtdResult,
     ] = await Promise.allSettled([
       supabase.rpc('dashboard_kpis', {
         start_date: monthStartDate(),
@@ -221,6 +319,42 @@ export function useDashboard(userId: string | undefined) {
         .from('accounts')
         .select('*', { count: 'exact', head: true })
         .is('owner', null),
+      supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_credit', true)
+        .neq('type', 'transfer')
+        .gte('posted_at', daysAgoIso(30)),
+      supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_credit', true)
+        .neq('type', 'transfer')
+        .eq('category_source', 'rule')
+        .gte('posted_at', daysAgoIso(30)),
+      supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_credit', true)
+        .neq('type', 'transfer')
+        .is('category_id', null)
+        .is('user_category_id', null)
+        .gte('posted_at', daysAgoIso(7)),
+      supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_credit', true)
+        .neq('type', 'transfer')
+        .eq('category_source', 'user')
+        .gte('updated_at', daysAgoIso(7)),
+      supabase
+        .from('transactions')
+        .select('owner, type, amount')
+        .eq('is_deleted', false)
+        .eq('is_pending', false)
+        .in('type', ['income', 'expense'])
+        .gte('posted_at', `${monthStartDate()}T00:00:00Z`)
+        .lt('posted_at', `${tomorrowDate()}T00:00:00Z`),
     ])
 
     let loadFailed = false
@@ -309,6 +443,100 @@ export function useDashboard(userId: string | undefined) {
           ? (unownedAccountsResult.value.count ?? 0)
           : 0,
     })
+
+    const totalEligibleCount30d =
+      totalEligibleAutoRateResult.status === 'fulfilled' && !totalEligibleAutoRateResult.value.error
+        ? (totalEligibleAutoRateResult.value.count ?? 0)
+        : 0
+
+    const autoCategorizedCount30d =
+      autoCategorizedResult.status === 'fulfilled' && !autoCategorizedResult.value.error
+        ? (autoCategorizedResult.value.count ?? 0)
+        : 0
+
+    const uncategorizedCount7d =
+      uncategorizedLast7dResult.status === 'fulfilled' && !uncategorizedLast7dResult.value.error
+        ? (uncategorizedLast7dResult.value.count ?? 0)
+        : 0
+
+    const manualFixes7d =
+      manualFixesLast7dResult.status === 'fulfilled' && !manualFixesLast7dResult.value.error
+        ? (manualFixesLast7dResult.value.count ?? 0)
+        : 0
+
+    setAutopilotMetrics({
+      autoCategorizedRatePct:
+        totalEligibleCount30d > 0 ? (autoCategorizedCount30d / totalEligibleCount30d) * 100 : null,
+      autoCategorizedCount30d,
+      totalEligibleCount30d,
+      uncategorizedCount7d,
+      manualFixes7d,
+    })
+
+    if (ownerTransactionsMtdResult.status === 'fulfilled' && !ownerTransactionsMtdResult.value.error) {
+      const ownerRows = (ownerTransactionsMtdResult.value.data ?? []) as DashboardOwnerTxRow[]
+      const aggregateByOwner = OWNER_ROW_ORDER.reduce<Record<DashboardOwnerKey, DashboardOwnerAggregate>>(
+        (acc, owner) => ({
+          ...acc,
+          [owner]: { incomeMtd: 0, spendMtd: 0 },
+        }),
+        {} as Record<DashboardOwnerKey, DashboardOwnerAggregate>,
+      )
+
+      for (const row of ownerRows) {
+        const owner = normalizeOwner(row.owner)
+        const amount = toNumber(row.amount)
+        if (row.type === 'income') {
+          aggregateByOwner[owner].incomeMtd += amount
+        } else if (row.type === 'expense') {
+          aggregateByOwner[owner].spendMtd += Math.abs(amount)
+        }
+      }
+
+      const totalSpendMtd = OWNER_ROW_ORDER.reduce(
+        (sum, owner) => sum + aggregateByOwner[owner].spendMtd,
+        0,
+      )
+      const totalIncomeMtd = OWNER_ROW_ORDER.reduce(
+        (sum, owner) => sum + aggregateByOwner[owner].incomeMtd,
+        0,
+      )
+
+      const rows = OWNER_ROW_ORDER
+        .map((owner): DashboardOwnerResponsibilityRow => {
+          const spendMtd = aggregateByOwner[owner].spendMtd
+          const incomeMtd = aggregateByOwner[owner].incomeMtd
+          return {
+            owner,
+            label: OWNER_LABELS[owner],
+            spendMtd,
+            incomeMtd,
+            cashFlowMtd: incomeMtd - spendMtd,
+            spendSharePct: totalSpendMtd > 0 ? (spendMtd / totalSpendMtd) * 100 : null,
+          }
+        })
+        .filter((row) => row.owner !== 'unknown' || row.spendMtd > 0 || row.incomeMtd > 0)
+
+      setOwnerResponsibility({
+        rows,
+        totalIncomeMtd,
+        totalSpendMtd,
+      })
+    } else {
+      setOwnerResponsibility(emptyOwnerResponsibility())
+      if (ownerTransactionsMtdResult.status === 'fulfilled' && ownerTransactionsMtdResult.value.error) {
+        captureException(ownerTransactionsMtdResult.value.error, {
+          component: 'useDashboard',
+          action: 'load-owner-responsibility',
+        })
+      }
+      if (ownerTransactionsMtdResult.status === 'rejected') {
+        captureException(ownerTransactionsMtdResult.reason, {
+          component: 'useDashboard',
+          action: 'load-owner-responsibility',
+        })
+      }
+    }
 
     if (loadFailed) {
       setError('Some dashboard metrics could not be loaded.')
@@ -399,6 +627,51 @@ export function useDashboard(userId: string | undefined) {
     void ensureConnected()
   }, [refreshAll, userId])
 
+  useEffect(() => {
+    if (!userId) return
+
+    let active = true
+
+    const loadSupplemental = async () => {
+      setShiftLoading(true)
+      setSavingsLoading(true)
+
+      try {
+        const [shiftResult, savingsResult] = await Promise.all([
+          supabase.rpc('shift_week_summary'),
+          supabase.rpc('savings_bucket_summary'),
+        ])
+
+        if (!active) return
+
+        if (shiftResult.error) throw shiftResult.error
+        if (savingsResult.error) throw savingsResult.error
+
+        setShiftSummary((shiftResult.data ?? null) as ShiftWeekSummaryRpc | null)
+        setSavingsSummary((savingsResult.data ?? null) as SavingsBucketSummaryRpc | null)
+      } catch (supplementalError) {
+        if (!active) return
+        setShiftSummary(null)
+        setSavingsSummary(null)
+        captureException(supplementalError, {
+          component: 'useDashboard',
+          action: 'load-shift-and-savings-rpcs',
+        })
+      } finally {
+        if (active) {
+          setShiftLoading(false)
+          setSavingsLoading(false)
+        }
+      }
+    }
+
+    void loadSupplemental()
+
+    return () => {
+      active = false
+    }
+  }, [userId])
+
   const onSyncNow = useCallback(async () => {
     if (!userId) return
 
@@ -472,6 +745,8 @@ export function useDashboard(userId: string | undefined) {
     checkingConnection,
     needsConnection,
     attentionCounts,
+    autopilotMetrics,
+    ownerResponsibility,
     kpis,
     upcomingRenewals,
     anomalies,
@@ -488,5 +763,9 @@ export function useDashboard(userId: string | undefined) {
     sessionExpired,
     syncNeedsReconnect,
     onSyncNow,
+    shiftSummary,
+    savingsSummary,
+    shiftLoading,
+    savingsLoading,
   }
 }

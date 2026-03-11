@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import { captureException } from '@/lib/errorReporting'
 import { supabase } from '@/lib/supabase'
-import { groupShiftsByWeek } from '@/lib/shiftWeeks'
+import { calcWeekSummary, groupShiftsByWeek } from '@/lib/shiftWeeks'
 import type {
   EmployerLocationRecord,
   EmployerPaySchedule,
@@ -39,6 +39,21 @@ export type NewShiftInput = {
 
 export type UpdateShiftInput = NewShiftInput & {
   shiftId: string
+}
+
+export type EmployerFormState = {
+  name: string
+  shortCode: string
+  color: string
+  paySchedule: EmployerPaySchedule
+  payLagDays: string
+  ptoPolicyHoursPerHour: string
+}
+
+export type LocationFormState = {
+  employerId: string
+  name: string
+  shortCode: string
 }
 
 function normalizeNumber(value: number): number {
@@ -403,7 +418,192 @@ export function useShiftLog(userId: string | undefined) {
 
   const weeks = useMemo<ShiftWeek[]>(() => groupShiftsByWeek(shifts, weekStartsOn), [shifts, weekStartsOn])
 
+  // ─── UI / page-level state ────────────────────────────────────────────────
+
+  const [goalDraft, setGoalDraft] = useState(String(weeklyGoal))
+  const [weekStartsDraft, setWeekStartsDraft] = useState<0 | 1>(weekStartsOn)
+  const [employerForm, setEmployerForm] = useState<EmployerFormState>({
+    name: '',
+    shortCode: '',
+    color: '#2563EB',
+    paySchedule: 'biweekly',
+    payLagDays: '14',
+    ptoPolicyHoursPerHour: '',
+  })
+  const [locationForm, setLocationForm] = useState<LocationFormState>({
+    employerId: '',
+    name: '',
+    shortCode: '',
+  })
+  const [isAddShiftOpen, setIsAddShiftOpen] = useState(false)
+  const [editingShift, setEditingShift] = useState<ShiftRecord | null>(null)
+  const [busyShiftId, setBusyShiftId] = useState<string | null>(null)
+  const [quickAdding, setQuickAdding] = useState(false)
+
+  useEffect(() => {
+    setGoalDraft(String(weeklyGoal))
+    setWeekStartsDraft(weekStartsOn)
+  }, [weekStartsOn, weeklyGoal])
+
+  useEffect(() => {
+    if (!locationForm.employerId && employers[0]) {
+      setLocationForm((current) => ({ ...current, employerId: employers[0].id }))
+    }
+  }, [employers, locationForm.employerId])
+
+  const totalPayAllWeeks = useMemo(
+    () =>
+      weeks
+        .flatMap((week) => week.shifts)
+        .filter((shift) => !shift.is_non_pay)
+        .reduce((sum, shift) => sum + Number(shift.gross_pay || 0), 0),
+    [weeks],
+  )
+
+  const mostRecentShift = useMemo(() => {
+    const allShifts = weeks.flatMap((week) => week.shifts)
+    if (allShifts.length === 0) return null
+    return allShifts
+      .slice()
+      .sort((a, b) => {
+        const dateCompare = b.shift_date.localeCompare(a.shift_date)
+        if (dateCompare !== 0) return dateCompare
+        return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+      })[0]
+  }, [weeks])
+
+  const currentWeekSummary = useMemo(() => {
+    if (!weeks[0]) return null
+    return calcWeekSummary(weeks[0], employersById, weeklyGoal)
+  }, [employersById, weeklyGoal, weeks])
+
+  const clearMessages = useCallback(() => {
+    setError('')
+    setSuccess('')
+  }, [])
+
+  const onSavePreferences = useCallback(async () => {
+    const parsedGoal = Number(goalDraft)
+    await savePreferences(Number.isFinite(parsedGoal) ? parsedGoal : weeklyGoal, weekStartsDraft)
+  }, [goalDraft, savePreferences, weekStartsDraft, weeklyGoal])
+
+  const onAddEmployer = useCallback(async () => {
+    const added = await addEmployer({
+      name: employerForm.name,
+      shortCode: employerForm.shortCode,
+      color: employerForm.color,
+      paySchedule: employerForm.paySchedule,
+      payLagDays: Number(employerForm.payLagDays || 0),
+      ptoPolicyHoursPerHour: employerForm.ptoPolicyHoursPerHour
+        ? Number(employerForm.ptoPolicyHoursPerHour)
+        : null,
+    })
+    if (added) {
+      setEmployerForm((current) => ({
+        ...current,
+        name: '',
+        shortCode: '',
+        ptoPolicyHoursPerHour: '',
+      }))
+    }
+  }, [addEmployer, employerForm])
+
+  const onAddLocation = useCallback(async () => {
+    const added = await addLocation({
+      employerId: locationForm.employerId,
+      name: locationForm.name,
+      shortCode: locationForm.shortCode,
+    })
+    if (added) {
+      setLocationForm((current) => ({ ...current, name: '', shortCode: '' }))
+    }
+  }, [addLocation, locationForm])
+
+  const onDeleteShift = useCallback(
+    async (shiftId: string) => {
+      setBusyShiftId(shiftId)
+      try {
+        await deleteShift(shiftId)
+      } finally {
+        setBusyShiftId(null)
+      }
+    },
+    [deleteShift],
+  )
+
+  const onDuplicateShift = useCallback(
+    async (shift: ShiftRecord) => {
+      setBusyShiftId(shift.id)
+      try {
+        const today = new Date().toISOString().slice(0, 10)
+        await addShift({
+          shiftDate: today,
+          employerId: shift.employer_id,
+          locationId: shift.location_id,
+          hoursWorked: Number(shift.hours_worked || 0),
+          grossPay: Number(shift.gross_pay || 0),
+          notes: shift.notes ?? '',
+          isNonPay: shift.is_non_pay,
+        })
+      } finally {
+        setBusyShiftId(null)
+      }
+    },
+    [addShift],
+  )
+
+  const onQuickAddRecent = useCallback(async () => {
+    if (!mostRecentShift) return
+    clearMessages()
+    setQuickAdding(true)
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      await addShift({
+        shiftDate: today,
+        employerId: mostRecentShift.employer_id,
+        locationId: mostRecentShift.location_id,
+        hoursWorked: Number(mostRecentShift.hours_worked || 0),
+        grossPay: Number(mostRecentShift.gross_pay || 0),
+        notes: mostRecentShift.notes ?? '',
+        isNonPay: mostRecentShift.is_non_pay,
+      })
+    } finally {
+      setQuickAdding(false)
+    }
+  }, [addShift, clearMessages, mostRecentShift])
+
+  const onEditShift = useCallback(
+    (shift: ShiftRecord) => {
+      clearMessages()
+      setEditingShift(shift)
+      setIsAddShiftOpen(true)
+    },
+    [clearMessages],
+  )
+
+  const onSubmitShift = useCallback(
+    async (input: NewShiftInput) => {
+      if (editingShift) {
+        return updateShift({ shiftId: editingShift.id, ...input })
+      }
+      return addShift(input)
+    },
+    [addShift, editingShift, updateShift],
+  )
+
+  const openAddShift = useCallback(() => {
+    clearMessages()
+    setEditingShift(null)
+    setIsAddShiftOpen(true)
+  }, [clearMessages])
+
+  const closeAddShift = useCallback(() => {
+    setIsAddShiftOpen(false)
+    setEditingShift(null)
+  }, [])
+
   return {
+    // data layer
     loading,
     saving,
     error,
@@ -412,22 +612,40 @@ export function useShiftLog(userId: string | undefined) {
     weekStartsOn,
     employers,
     locations,
-    shifts,
     weeks,
     employersById,
     locationsById,
     locationsByEmployerId,
-    savePreferences,
-    addEmployer,
-    addLocation,
-    addShift,
-    updateShift,
-    deleteShift,
     reload: loadShiftLogData,
-    clearMessages: () => {
-      setError('')
-      setSuccess('')
-    },
+    clearMessages,
+    // UI state
+    goalDraft,
+    setGoalDraft,
+    weekStartsDraft,
+    setWeekStartsDraft,
+    employerForm,
+    setEmployerForm,
+    locationForm,
+    setLocationForm,
+    isAddShiftOpen,
+    editingShift,
+    busyShiftId,
+    quickAdding,
+    // derived
+    totalPayAllWeeks,
+    mostRecentShift,
+    currentWeekSummary,
+    // callbacks
+    onSavePreferences,
+    onAddEmployer,
+    onAddLocation,
+    onDeleteShift,
+    onDuplicateShift,
+    onQuickAddRecent,
+    onEditShift,
+    onSubmitShift,
+    openAddShift,
+    closeAddShift,
   }
 }
 

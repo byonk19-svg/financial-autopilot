@@ -270,6 +270,27 @@ export type SavingsBucketSummaryRpc = {
   } | null
 }
 
+// --- Account / Overview types ---
+
+export type AccountRow = {
+  id: string
+  name: string
+  institution: string | null
+  type: string
+  is_credit: boolean
+  owner: 'brianna' | 'elaine' | 'household'
+  balance: number | string | null
+  available_balance: number | string | null
+  currency: string
+}
+
+export type AccountGroup = {
+  label: string
+  accounts: AccountRow[]
+  total: number
+  isDebt: boolean
+}
+
 // --- Alert types ---
 
 export type AlertRow = {

@@ -116,7 +116,7 @@ export default function Login() {
       <section className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
         <DollarLogo />
         <h1 className="mt-5 text-center text-2xl font-semibold text-foreground">Login</h1>
-        <p className="mt-2 text-center text-sm text-muted-foreground">Checking your session...</p>
+        <p className="mt-2 text-center text-sm text-foreground/80">Checking your session...</p>
       </section>
     )
   }
@@ -125,7 +125,7 @@ export default function Login() {
     <section className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
       <DollarLogo />
       <h1 className="mt-5 text-center text-2xl font-semibold text-foreground">Login</h1>
-      <p className="mt-2 text-center text-sm text-muted-foreground">Choose a login method.</p>
+      <p className="mt-2 text-center text-sm text-foreground/80">Choose a login method.</p>
 
       <div className="mt-4 inline-flex w-full rounded-lg border border-border p-1">
         <button
@@ -136,9 +136,9 @@ export default function Login() {
             setStatus('idle')
           }}
           className={`min-h-11 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors-fast ${
-            mode === 'password'
+              mode === 'password'
               ? 'bg-primary text-primary-foreground'
-              : 'bg-transparent text-muted-foreground hover:bg-accent'
+              : 'bg-transparent text-foreground/80 hover:bg-accent'
           }`}
         >
           Password
@@ -151,9 +151,9 @@ export default function Login() {
             setStatus('idle')
           }}
           className={`min-h-11 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors-fast ${
-            mode === 'magic'
+              mode === 'magic'
               ? 'bg-primary text-primary-foreground'
-              : 'bg-transparent text-muted-foreground hover:bg-accent'
+              : 'bg-transparent text-foreground/80 hover:bg-accent'
           }`}
         >
           Magic Link
@@ -210,11 +210,11 @@ export default function Login() {
       </form>
 
       {mode === 'password' ? (
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-xs text-foreground/80">
           If you do not have a password yet, set one in Supabase Dashboard &gt; Authentication &gt; Users.
         </p>
       ) : (
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-xs text-foreground/80">
           Use magic link when email delivery is configured and not rate-limited.
         </p>
       )}

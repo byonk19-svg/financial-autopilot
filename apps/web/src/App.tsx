@@ -28,6 +28,7 @@ const loadLoginPage = () => import('./pages/Login')
 const loadConnectPage = () => import('./pages/Connect')
 const loadSubscriptionsPage = () => import('./pages/Subscriptions')
 const loadClassificationRulesPage = () => import('./pages/ClassificationRules')
+const loadAutoRulesPage = () => import('./pages/AutoRules')
 const loadAlertsPage = () => import('./pages/Alerts')
 const loadOverviewPage = () => import('./pages/Overview')
 const loadTransactionsPage = () => import('./pages/Transactions')
@@ -42,6 +43,7 @@ const LoginPage = lazy(loadLoginPage)
 const ConnectPage = lazy(loadConnectPage)
 const SubscriptionsPage = lazy(loadSubscriptionsPage)
 const ClassificationRulesPage = lazy(loadClassificationRulesPage)
+const AutoRulesPage = lazy(loadAutoRulesPage)
 const AlertsPage = lazy(loadAlertsPage)
 const OverviewPage = lazy(loadOverviewPage)
 const TransactionsPage = lazy(loadTransactionsPage)
@@ -74,6 +76,7 @@ const navGroups: NavGroup[] = [
     label: 'Config',
     items: [
       { to: '/rules', label: 'Rules', icon: Workflow, preload: loadRulesPage },
+      { to: '/auto-rules', label: 'Auto Rules', icon: Sparkles, preload: loadAutoRulesPage },
       { to: '/classification-rules', label: 'Recurring Rules', icon: Sparkles, preload: loadClassificationRulesPage },
       { to: '/shift-log', label: 'Shift Log', icon: CalendarClock, preload: loadShiftLogPage },
       { to: '/settings', label: 'Settings', icon: SettingsIcon, preload: loadSettingsPage },
@@ -283,7 +286,7 @@ export default function App() {
                     className="h-11 w-full rounded-xl border border-border bg-card/92 pl-9 pr-20 text-sm font-medium text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     aria-label="Search navigation pages"
                   />
-                  <div className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-md border border-border bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground md:block">
+                  <div className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-md border border-border bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/80 md:block">
                     Ctrl K
                   </div>
 
@@ -410,6 +413,7 @@ export default function App() {
                   <Route path="/connect" element={<ConnectPage />} />
                   <Route path="/dashboard" element={<Navigate to="/" replace />} />
                   <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                  <Route path="/auto-rules" element={<AutoRulesPage />} />
                   <Route path="/classification-rules" element={<ClassificationRulesPage />} />
                   <Route path="/alerts" element={<AlertsPage />} />
                   <Route path="/overview" element={<OverviewPage />} />

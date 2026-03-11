@@ -29,6 +29,9 @@ export function RulesHeader({
           <p className="mt-2 text-sm text-muted-foreground">
             Manually-run rules: aliases standardize merchant names, behavior rules force category or type. Run analysis to apply them.
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            For sync-time spending categorization on newly imported transactions, use Auto Rules.
+          </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Aliases: {activeAliasCount}/{aliasCount} active • Behavior rules: {activeRuleCount}/{ruleCount} active
           </p>

@@ -7,6 +7,12 @@ import {
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { getCronSecret, getSimplefinConfig, getSupabaseConfig } from "../_shared/env.ts";
 import { normalizeMerchantForRecurring } from "../_shared/merchant.ts";
+import {
+  evaluateOwnerRulesV1,
+  type OwnerRuleV1,
+  type OwnerValueV1,
+  type TransactionOwnerRuleInputV1,
+} from "../_shared/owner_rules_v1.ts";
 import { evaluateRulesV1, type CategoryRuleV1, type TransactionRuleInputV1 } from "../_shared/rules_v1.ts";
 import { fetchAccounts } from "../_shared/simplefin.ts";
 
@@ -58,6 +64,7 @@ type StoredTransactionForRules = {
   provider_transaction_id: string;
   account_id: string;
   amount: number | string;
+  owner: string | null;
   merchant_canonical: string | null;
   merchant_normalized: string | null;
   description_short: string;
@@ -679,6 +686,33 @@ async function fetchCategoryRulesV1(
   })) as CategoryRuleV1[];
 }
 
+async function fetchOwnerRulesV1(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<OwnerRuleV1[]> {
+  const { data, error } = await adminClient
+    .from("transaction_owner_rules_v1")
+    .select("id, rule_type, merchant_pattern, account_id, min_amount, max_amount, set_owner, is_active, created_at")
+    .eq("user_id", userId)
+    .eq("is_active", true);
+
+  if (error) {
+    throw new HttpError(500, "Could not load v1 transaction owner rules.");
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    rule_type: row.rule_type,
+    merchant_pattern: row.merchant_pattern,
+    account_id: row.account_id,
+    min_amount: row.min_amount === null ? null : Number(row.min_amount),
+    max_amount: row.max_amount === null ? null : Number(row.max_amount),
+    set_owner: row.set_owner,
+    is_active: row.is_active === true,
+    created_at: row.created_at ?? undefined,
+  })) as OwnerRuleV1[];
+}
+
 async function getCategoryRulesV1ForUser(
   adminClient: ReturnType<typeof createClient>,
   userId: string,
@@ -687,6 +721,18 @@ async function getCategoryRulesV1ForUser(
   const cached = cache.get(userId);
   if (cached) return cached;
   const loaded = await fetchCategoryRulesV1(adminClient, userId);
+  cache.set(userId, loaded);
+  return loaded;
+}
+
+async function getOwnerRulesV1ForUser(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  cache: Map<string, OwnerRuleV1[]>,
+): Promise<OwnerRuleV1[]> {
+  const cached = cache.get(userId);
+  if (cached) return cached;
+  const loaded = await fetchOwnerRulesV1(adminClient, userId);
   cache.set(userId, loaded);
   return loaded;
 }
@@ -717,7 +763,7 @@ async function applyCategoryRulesV1AfterImport(
     const { data, error } = await adminClient
       .from("transactions")
       .select(
-        "id, provider_transaction_id, account_id, amount, merchant_canonical, merchant_normalized, description_short, category_id, user_category_id, category_source, classification_rule_ref, classification_explanation",
+        "id, provider_transaction_id, account_id, amount, owner, merchant_canonical, merchant_normalized, description_short, category_id, user_category_id, category_source, classification_rule_ref, classification_explanation",
       )
       .eq("user_id", userId)
       .eq("account_id", accountId)
@@ -769,6 +815,77 @@ async function applyCategoryRulesV1AfterImport(
 
       if (updateError) {
         throw new HttpError(500, "Could not apply v1 category rule to imported transactions.");
+      }
+
+      updatedCount += 1;
+    }
+  }
+
+  return updatedCount;
+}
+
+async function applyOwnerRulesV1AfterImport(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  accountId: string,
+  importedSnapshots: ImportedTransactionSnapshot[],
+  rules: OwnerRuleV1[],
+): Promise<number> {
+  if (importedSnapshots.length === 0 || rules.length === 0) {
+    return 0;
+  }
+
+  const snapshotByProviderId = new Map<string, ImportedTransactionSnapshot>();
+  for (const snapshot of importedSnapshots) {
+    snapshotByProviderId.set(snapshot.providerTransactionId, snapshot);
+  }
+
+  const providerIds = [...snapshotByProviderId.keys()];
+  const batchSize = 250;
+  let updatedCount = 0;
+
+  for (let i = 0; i < providerIds.length; i += batchSize) {
+    const providerBatch = providerIds.slice(i, i + batchSize);
+
+    const { data, error } = await adminClient
+      .from("transactions")
+      .select(
+        "id, provider_transaction_id, account_id, amount, owner, merchant_canonical, merchant_normalized, description_short, category_id, user_category_id, category_source, classification_rule_ref, classification_explanation",
+      )
+      .eq("user_id", userId)
+      .eq("account_id", accountId)
+      .in("provider_transaction_id", providerBatch);
+
+    if (error) {
+      throw new HttpError(500, "Could not load transactions for owner rule evaluation.");
+    }
+
+    for (const row of (data ?? []) as StoredTransactionForRules[]) {
+      const imported = snapshotByProviderId.get(row.provider_transaction_id);
+      if (!imported) continue;
+
+      const input: TransactionOwnerRuleInputV1 = {
+        accountId: imported.accountId,
+        amount: imported.amount,
+        merchantCanonical: imported.merchantCanonical ?? row.merchant_canonical,
+        merchantNormalized: imported.merchantNormalized ?? row.merchant_normalized,
+        descriptionShort: imported.descriptionShort || row.description_short || "Transaction",
+      };
+
+      const result = evaluateOwnerRulesV1(input, rules);
+      if (result.decision !== "matched_rule") continue;
+
+      const nextOwner = result.matchedRule.set_owner as OwnerValueV1;
+      if (row.owner === nextOwner) continue;
+
+      const { error: updateError } = await adminClient
+        .from("transactions")
+        .update({ owner: nextOwner })
+        .eq("id", row.id)
+        .eq("user_id", userId);
+
+      if (updateError) {
+        throw new HttpError(500, "Could not apply v1 owner rule to imported transactions.");
       }
 
       updatedCount += 1;
@@ -855,11 +972,13 @@ Deno.serve(async (req) => {
     const uniqueUserIds = [...new Set(safeConnections.map((connection) => connection.user_id))];
     const daysMap = await getRawDescriptionDaysMap(adminClient, uniqueUserIds);
     const userTransactionCountCache = new Map<string, number>();
-    const userRuleCache = new Map<string, CategoryRuleV1[]>();
+    const userCategoryRuleCache = new Map<string, CategoryRuleV1[]>();
+    const userOwnerRuleCache = new Map<string, OwnerRuleV1[]>();
 
     let accountsSynced = 0;
     let transactionsSynced = 0;
     let categorizedByRules = 0;
+    let ownerAssignedByRules = 0;
     let stalePendingArchived = 0;
     let forcePendingArchived = 0;
     const seenAccountKeys = new Set<string>();
@@ -1073,13 +1192,29 @@ Deno.serve(async (req) => {
             await upsertTransactions(adminClient, transactionRows);
 
             if (transactionSnapshots.length > 0) {
-              const rules = await getCategoryRulesV1ForUser(adminClient, connection.user_id, userRuleCache);
+              const categoryRules = await getCategoryRulesV1ForUser(
+                adminClient,
+                connection.user_id,
+                userCategoryRuleCache,
+              );
+              const ownerRules = await getOwnerRulesV1ForUser(
+                adminClient,
+                connection.user_id,
+                userOwnerRuleCache,
+              );
               categorizedByRules += await applyCategoryRulesV1AfterImport(
                 adminClient,
                 connection.user_id,
                 account.id,
                 transactionSnapshots,
-                rules,
+                categoryRules,
+              );
+              ownerAssignedByRules += await applyOwnerRulesV1AfterImport(
+                adminClient,
+                connection.user_id,
+                account.id,
+                transactionSnapshots,
+                ownerRules,
               );
             }
 
@@ -1121,6 +1256,7 @@ Deno.serve(async (req) => {
       accountsSynced,
       transactionsSynced,
       categorizedByRules,
+      ownerAssignedByRules,
       stalePendingArchived,
       forcePendingArchived,
       forceArchivePendingDays: allowForceArchivePending ? options.forceArchivePendingDays : null,
