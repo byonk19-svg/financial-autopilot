@@ -18,7 +18,7 @@ export function hasAuthStateFile(): boolean {
 }
 
 export function hasAuthSetup(): boolean {
-  return hasAuthStateFile()
+  return hasAuthStateFile() || hasPasswordAuthEnv()
 }
 
 export async function ensureSignedIn(page: Page): Promise<void> {

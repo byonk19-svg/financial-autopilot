@@ -27,9 +27,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   const authStatePath = process.env.PLAYWRIGHT_AUTH_STATE ?? '.auth/user.json'
   const resolvedStatePath = resolveStatePath(authStatePath)
   fs.mkdirSync(path.dirname(resolvedStatePath), { recursive: true })
-  if (fs.existsSync(resolvedStatePath)) {
-    fs.rmSync(resolvedStatePath, { force: true })
-  }
+  const hadExistingState = fs.existsSync(resolvedStatePath)
 
   const baseURL = config.projects[0]?.use?.baseURL?.toString() ?? 'http://127.0.0.1:5174'
   const browser = await chromium.launch({ headless: true })
@@ -55,7 +53,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       console.warn(`Playwright global setup could not establish auth session: ${detail}`)
-      if (fs.existsSync(resolvedStatePath)) {
+      if (!hadExistingState && fs.existsSync(resolvedStatePath)) {
         fs.rmSync(resolvedStatePath, { force: true })
       }
     }

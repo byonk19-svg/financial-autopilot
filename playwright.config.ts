@@ -5,6 +5,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:5174'
 const authStatePath = process.env.PLAYWRIGHT_AUTH_STATE ?? '.auth/user.json'
 const hasPasswordAuth = Boolean(process.env.PLAYWRIGHT_EMAIL && process.env.PLAYWRIGHT_PASSWORD)
 const storageState = fs.existsSync(authStatePath) || hasPasswordAuth ? authStatePath : undefined
+const shouldUseMockSupabaseEnv = !hasPasswordAuth
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -29,10 +30,14 @@ export default defineConfig({
         timeout: 120_000,
         env: {
           ...process.env,
-          VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ?? 'https://example.supabase.co',
-          VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ?? 'test-anon-key',
-          VITE_FUNCTIONS_URL:
-            process.env.VITE_FUNCTIONS_URL ?? 'https://example.supabase.co/functions/v1',
+          ...(shouldUseMockSupabaseEnv
+            ? {
+                VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL ?? 'https://example.supabase.co',
+                VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY ?? 'test-anon-key',
+                VITE_FUNCTIONS_URL:
+                  process.env.VITE_FUNCTIONS_URL ?? 'https://example.supabase.co/functions/v1',
+              }
+            : {}),
           VITE_ENABLE_RERUN_DETECTION: process.env.VITE_ENABLE_RERUN_DETECTION ?? 'true',
         },
       },

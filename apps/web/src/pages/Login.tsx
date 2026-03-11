@@ -137,7 +137,7 @@ export default function Login() {
           }}
           className={`min-h-11 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors-fast ${
               mode === 'password'
-              ? 'bg-primary text-primary-foreground'
+              ? 'bg-[hsl(158_35%_34%)] text-primary-foreground'
               : 'bg-transparent text-foreground/80 hover:bg-accent'
           }`}
         >
@@ -152,7 +152,7 @@ export default function Login() {
           }}
           className={`min-h-11 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors-fast ${
               mode === 'magic'
-              ? 'bg-primary text-primary-foreground'
+              ? 'bg-[hsl(158_35%_34%)] text-primary-foreground'
               : 'bg-transparent text-foreground/80 hover:bg-accent'
           }`}
         >
@@ -197,7 +197,7 @@ export default function Login() {
         <button
           type="submit"
           disabled={status === 'sending'}
-          className="min-h-11 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors-fast hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-h-11 rounded-lg bg-[hsl(158_35%_34%)] px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors-fast hover:bg-[hsl(158_35%_31%)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {status === 'sending'
             ? mode === 'password'
