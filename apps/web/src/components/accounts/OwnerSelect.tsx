@@ -40,7 +40,7 @@ export function OwnerSelect({ accountId, owner, onSave }: OwnerSelectProps) {
         : 'bg-muted/60 text-muted-foreground border border-dashed border-border'
 
   const triggerLabel =
-    owner === 'brianna' ? 'Brianna' : owner === 'elaine' ? 'Elaine' : saving ? '…' : '+ Assign'
+    owner === 'brianna' ? 'Brianna' : owner === 'elaine' ? 'Elaine' : saving ? '...' : '+ Assign'
 
   return (
     <div ref={ref} className="relative">
@@ -48,7 +48,7 @@ export function OwnerSelect({ accountId, owner, onSave }: OwnerSelectProps) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={saving}
-        className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80 disabled:opacity-50 ${triggerClass}`}
+        className={`min-h-11 rounded-full px-3 py-2 text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50 md:min-h-9 md:px-2.5 md:py-1 ${triggerClass}`}
       >
         {triggerLabel}
       </button>
@@ -62,7 +62,7 @@ export function OwnerSelect({ accountId, owner, onSave }: OwnerSelectProps) {
               onClick={() => {
                 void handlePick(opt)
               }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted/60 ${
+              className={`flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/60 md:min-h-9 md:text-xs ${
                 opt === owner ? 'font-semibold text-foreground' : 'text-muted-foreground'
               }`}
             >
@@ -83,3 +83,4 @@ export function OwnerSelect({ accountId, owner, onSave }: OwnerSelectProps) {
     </div>
   )
 }
+

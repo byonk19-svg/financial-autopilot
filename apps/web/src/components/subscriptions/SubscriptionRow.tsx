@@ -100,7 +100,7 @@ export function SubscriptionRow({
 }: SubscriptionRowProps) {
   const compact = density === 'compact'
   const badgeSize = compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs'
-  const buttonSize = compact ? 'h-7 px-2.5 text-[11px]' : 'h-8 px-3 text-xs'
+  const buttonSize = compact ? 'h-11 px-3 text-sm md:h-8 md:px-2.5 md:text-[11px]' : 'h-10 px-3 text-xs'
 
   const [expanded, setExpanded] = useState(false)
   const [applyToFutureCharges, setApplyToFutureCharges] = useState(true)
@@ -121,6 +121,7 @@ export function SubscriptionRow({
   const effectiveNotify = effectiveNotifyDays({ cadence, notifyDaysBefore })
   const notifyFieldId = `notify-${merchant.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${cadence}`
   const falsePositiveFieldId = `false-positive-rerun-${merchant.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${cadence}`
+  const detailsId = `subscription-details-${merchant.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${cadence}`
   const historyAmounts = historyRows.map((row) => Math.abs(toNumber(row.amount)))
   const latestHistoryAmount = historyAmounts[0] ?? 0
   const priorAverageAmount =
@@ -158,6 +159,9 @@ export function SubscriptionRow({
       <div
         role="button"
         tabIndex={0}
+        aria-expanded={expanded}
+        aria-controls={detailsId}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} details for ${displayMerchant}`}
         onClick={toggleExpanded}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -165,7 +169,7 @@ export function SubscriptionRow({
             toggleExpanded()
           }
         }}
-        className={`cursor-pointer ${compact ? 'p-2.5' : 'p-3'}`}
+        className={`cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? 'p-2.5' : 'p-3'}`}
       >
         <div
           className={`grid min-w-0 grid-cols-1 items-center md:grid-cols-2 xl:grid-cols-[minmax(0,2.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_auto] ${
@@ -267,7 +271,7 @@ export function SubscriptionRow({
                       applyToFutureCharges,
                     )
                   }
-                  className={`rounded-md border bg-background text-foreground ${compact ? 'h-7 px-2 text-[11px]' : 'h-8 px-2.5 text-xs'}`}
+                  className={`rounded-md border bg-background text-foreground ${compact ? 'h-11 px-3 text-sm md:h-8 md:px-2 md:text-[11px]' : 'h-10 px-2.5 text-xs'}`}
                 >
                   <option value="needs_review">Needs review</option>
                   <option value="subscription">Subscription</option>
@@ -309,6 +313,7 @@ export function SubscriptionRow({
         {expanded && (
           <>
             <div
+              id={detailsId}
               className={`grid grid-cols-1 border-t sm:grid-cols-2 lg:grid-cols-5 ${
                 compact ? 'mt-2 gap-2 pt-2' : 'mt-3 gap-3 pt-3'
               }`}
@@ -373,7 +378,7 @@ export function SubscriptionRow({
                         const value = event.target.value
                         void onUpdateNotifyDaysBefore(value === 'default' ? null : Number.parseInt(value, 10))
                       }}
-                      className={`rounded-md border bg-background text-foreground ${compact ? 'h-7 px-2' : 'h-8 px-2.5'}`}
+                      className={`rounded-md border bg-background text-foreground ${compact ? 'h-11 px-3 text-sm md:h-8 md:px-2.5 md:text-xs' : 'h-10 px-2.5 text-xs'}`}
                     >
                       <option value="default">Default ({defaultNotifyDays} days)</option>
                       <option value="1">1 day</option>
@@ -395,7 +400,7 @@ export function SubscriptionRow({
                         applyToFutureCharges,
                       )
                     }
-                    className={`rounded-md border bg-background text-foreground ${compact ? 'h-7 px-2' : 'h-8 px-2.5'}`}
+                    className={`rounded-md border bg-background text-foreground ${compact ? 'h-11 px-3 text-sm md:h-8 md:px-2.5 md:text-xs' : 'h-10 px-2.5 text-xs'}`}
                   >
                     <option value="needs_review">Needs review</option>
                     <option value="subscription">Subscription</option>

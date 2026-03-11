@@ -270,52 +270,72 @@ export default function CashFlow() {
           <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Add recurring bill</h2>
             <div className="mt-3 grid gap-2">
-              <input
-                value={billForm.name}
-                onChange={(event) => setBillForm((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Bill name"
-                className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
-              />
+              <label htmlFor="cash-flow-bill-name" className="space-y-1 text-sm">
+                <span className="text-muted-foreground">Bill name</span>
+                <input
+                  id="cash-flow-bill-name"
+                  value={billForm.name}
+                  onChange={(event) => setBillForm((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Bill name"
+                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                />
+              </label>
               <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={billForm.amount}
-                  onChange={(event) => setBillForm((current) => ({ ...current, amount: event.target.value }))}
-                  placeholder="Amount"
-                  className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={billForm.dueDay}
-                  onChange={(event) => setBillForm((current) => ({ ...current, dueDay: event.target.value }))}
-                  placeholder="Due day (1-31)"
-                  className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
-                />
+                <label htmlFor="cash-flow-bill-amount" className="space-y-1 text-sm">
+                  <span className="text-muted-foreground">Amount</span>
+                  <input
+                    id="cash-flow-bill-amount"
+                    type="number"
+                    step="0.01"
+                    value={billForm.amount}
+                    onChange={(event) => setBillForm((current) => ({ ...current, amount: event.target.value }))}
+                    placeholder="Amount"
+                    className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  />
+                </label>
+                <label htmlFor="cash-flow-bill-due-day" className="space-y-1 text-sm">
+                  <span className="text-muted-foreground">Due day (1-31)</span>
+                  <input
+                    id="cash-flow-bill-due-day"
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={billForm.dueDay}
+                    onChange={(event) => setBillForm((current) => ({ ...current, dueDay: event.target.value }))}
+                    placeholder="Due day (1-31)"
+                    className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  />
+                </label>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                <select
-                  value={billForm.category}
-                  onChange={(event) =>
-                    setBillForm((current) => ({
-                      ...current,
-                      category: event.target.value as 'bill' | 'expense' | 'transfer',
-                    }))
-                  }
-                  className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
-                >
-                  <option value="bill">Bill</option>
-                  <option value="expense">Expense</option>
-                  <option value="transfer">Transfer</option>
-                </select>
-                <input
-                  type="color"
-                  value={billForm.color}
-                  onChange={(event) => setBillForm((current) => ({ ...current, color: event.target.value }))}
-                  className="h-[42px] w-full rounded-lg border border-input bg-card p-1"
-                />
+                <label htmlFor="cash-flow-bill-category" className="space-y-1 text-sm">
+                  <span className="text-muted-foreground">Category</span>
+                  <select
+                    id="cash-flow-bill-category"
+                    value={billForm.category}
+                    onChange={(event) =>
+                      setBillForm((current) => ({
+                        ...current,
+                        category: event.target.value as 'bill' | 'expense' | 'transfer',
+                      }))
+                    }
+                    className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  >
+                    <option value="bill">Bill</option>
+                    <option value="expense">Expense</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </label>
+                <label htmlFor="cash-flow-bill-color" className="space-y-1 text-sm">
+                  <span className="text-muted-foreground">Color</span>
+                  <input
+                    id="cash-flow-bill-color"
+                    type="color"
+                    value={billForm.color}
+                    onChange={(event) => setBillForm((current) => ({ ...current, color: event.target.value }))}
+                    className="h-[42px] w-full rounded-lg border border-input bg-card p-1"
+                  />
+                </label>
               </div>
               <button
                 type="button"
@@ -345,7 +365,7 @@ export default function CashFlow() {
                       onClick={() => {
                         void toggleBillTemplate(template.id, !template.is_active)
                       }}
-                      className="rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground"
+                      className="min-h-11 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
                     >
                       {template.is_active ? 'Disable' : 'Enable'}
                     </button>
@@ -358,38 +378,54 @@ export default function CashFlow() {
           <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Add projected income</h2>
             <div className="mt-3 grid gap-2">
-              <input
-                type="date"
-                value={incomeForm.expectedDate}
-                onChange={(event) => setIncomeForm((current) => ({ ...current, expectedDate: event.target.value }))}
-                className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
-              />
-              <input
-                type="number"
-                step="0.01"
-                value={incomeForm.amount}
-                onChange={(event) => setIncomeForm((current) => ({ ...current, amount: event.target.value }))}
-                placeholder="Amount"
-                className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
-              />
-              <input
-                value={incomeForm.description}
-                onChange={(event) => setIncomeForm((current) => ({ ...current, description: event.target.value }))}
-                placeholder="Description"
-                className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
-              />
-              <select
-                value={incomeForm.employerId}
-                onChange={(event) => setIncomeForm((current) => ({ ...current, employerId: event.target.value }))}
-                className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
-              >
-                <option value="">No employer</option>
-                {employers.map((employer) => (
-                  <option key={employer.id} value={employer.id}>
-                    {employer.name}
-                  </option>
-                ))}
-              </select>
+              <label htmlFor="cash-flow-income-date" className="space-y-1 text-sm">
+                <span className="text-muted-foreground">Expected date</span>
+                <input
+                  id="cash-flow-income-date"
+                  type="date"
+                  value={incomeForm.expectedDate}
+                  onChange={(event) => setIncomeForm((current) => ({ ...current, expectedDate: event.target.value }))}
+                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                />
+              </label>
+              <label htmlFor="cash-flow-income-amount" className="space-y-1 text-sm">
+                <span className="text-muted-foreground">Amount</span>
+                <input
+                  id="cash-flow-income-amount"
+                  type="number"
+                  step="0.01"
+                  value={incomeForm.amount}
+                  onChange={(event) => setIncomeForm((current) => ({ ...current, amount: event.target.value }))}
+                  placeholder="Amount"
+                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                />
+              </label>
+              <label htmlFor="cash-flow-income-description" className="space-y-1 text-sm">
+                <span className="text-muted-foreground">Description</span>
+                <input
+                  id="cash-flow-income-description"
+                  value={incomeForm.description}
+                  onChange={(event) => setIncomeForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Description"
+                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                />
+              </label>
+              <label htmlFor="cash-flow-income-employer" className="space-y-1 text-sm">
+                <span className="text-muted-foreground">Employer</span>
+                <select
+                  id="cash-flow-income-employer"
+                  value={incomeForm.employerId}
+                  onChange={(event) => setIncomeForm((current) => ({ ...current, employerId: event.target.value }))}
+                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                >
+                  <option value="">No employer</option>
+                  {employers.map((employer) => (
+                    <option key={employer.id} value={employer.id}>
+                      {employer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -418,7 +454,7 @@ export default function CashFlow() {
                       onClick={() => {
                         void removeProjectedIncome(entry.id)
                       }}
-                      className="rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground"
+                      className="min-h-11 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
                     >
                       Remove
                     </button>
