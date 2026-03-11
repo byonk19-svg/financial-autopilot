@@ -1,3 +1,4 @@
+import { useCallback, useRef } from 'react'
 import { format } from 'date-fns'
 import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -14,6 +15,7 @@ import { TransactionFilterChips } from '@/components/transactions/TransactionFil
 import { CreateRuleModal } from '@/components/transactions/CreateRuleModal'
 import { CategoryFollowUpBanner } from '@/components/transactions/CategoryFollowUpBanner'
 import { HideFollowUpBanner } from '@/components/transactions/HideFollowUpBanner'
+import { useModalA11y } from '@/hooks/useModalA11y'
 import {
   TRANSACTION_VIEW_PRESETS,
   UNCATEGORIZED_VALUE,
@@ -112,6 +114,21 @@ export default function Transactions() {
     clearSplitDraft,
     saveSplitDraft,
   } = useTransactions()
+  const createCategoryModalRef = useRef<HTMLDivElement>(null)
+  const createCategoryInputRef = useRef<HTMLInputElement>(null)
+
+  const closeCreateCategoryModal = useCallback(() => {
+    setCreateCategoryForTxnId(null)
+    setCreateCategoryName('')
+    setCreateCategoryError('')
+  }, [setCreateCategoryError, setCreateCategoryForTxnId, setCreateCategoryName])
+
+  useModalA11y({
+    open: Boolean(createCategoryForTxnId),
+    onClose: closeCreateCategoryModal,
+    containerRef: createCategoryModalRef,
+    initialFocusRef: createCategoryInputRef,
+  })
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-5 lg:space-y-6" aria-busy={fetching} data-testid="transactions-page">
@@ -787,14 +804,14 @@ export default function Transactions() {
           aria-modal="true"
           aria-labelledby="create-category-title"
         >
-          <div className="w-full max-w-sm rounded-xl border border bg-card p-5 shadow-xl">
+          <div ref={createCategoryModalRef} tabIndex={-1} className="w-full max-w-sm rounded-xl border border bg-card p-5 shadow-xl">
             <h3 id="create-category-title" className="text-lg font-semibold text-foreground">New category</h3>
             <form
               className="mt-4 space-y-3"
               onSubmit={(e) => { e.preventDefault(); void createCategory() }}
             >
               <input
-                autoFocus
+                ref={createCategoryInputRef}
                 type="text"
                 value={createCategoryName}
                 onChange={(e) => setCreateCategoryName(e.target.value)}
@@ -809,19 +826,15 @@ export default function Transactions() {
                 <button
                   type="button"
                   disabled={createCategorySubmitting}
-                  onClick={() => {
-                    setCreateCategoryForTxnId(null)
-                    setCreateCategoryName('')
-                    setCreateCategoryError('')
-                  }}
-                  className="rounded-md border border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={closeCreateCategoryModal}
+                  className="min-h-11 rounded-md border border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:py-1.5"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createCategorySubmitting || !createCategoryName.trim()}
-                  className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-11 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:py-1.5"
                 >
                   {createCategorySubmitting ? 'Creating...' : 'Create'}
                 </button>

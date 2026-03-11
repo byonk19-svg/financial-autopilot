@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { EmployerLocationRecord, EmployerRecord } from '@/lib/types'
 import type { NewShiftInput } from '@/hooks/useShiftLog'
 import { toNumber } from '@/lib/subscriptionFormatters'
+import { useModalA11y } from '@/hooks/useModalA11y'
 
 type AddShiftModalProps = {
   open: boolean
@@ -55,6 +56,15 @@ export default function AddShiftModal({
 }: AddShiftModalProps) {
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState('')
+  const modalRef = useRef<HTMLDivElement>(null)
+  const dateInputRef = useRef<HTMLInputElement>(null)
+
+  useModalA11y({
+    open,
+    onClose,
+    containerRef: modalRef,
+    initialFocusRef: dateInputRef,
+  })
 
   useEffect(() => {
     if (!open) return
@@ -97,13 +107,13 @@ export default function AddShiftModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="add-shift-modal-title">
+      <div ref={modalRef} tabIndex={-1} className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+          <h3 id="add-shift-modal-title" className="text-lg font-semibold text-foreground">{title}</h3>
           <button
             type="button"
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground"
+            className="min-h-11 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
             onClick={onClose}
             disabled={saving}
           >
@@ -154,6 +164,7 @@ export default function AddShiftModal({
             <label className="space-y-1 text-sm">
               <span className="text-muted-foreground">Date</span>
               <input
+                ref={dateInputRef}
                 type="date"
                 value={form.shiftDate}
                 onChange={(event) => setForm((current) => ({ ...current, shiftDate: event.target.value }))}

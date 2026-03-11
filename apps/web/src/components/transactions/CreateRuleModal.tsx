@@ -1,6 +1,8 @@
 import { format } from 'date-fns'
+import { useRef } from 'react'
 import type { AccountOption, CategoryOption, CreateRuleFormState, TransactionRow } from '@/lib/types'
 import { parseAmount } from '@/hooks/useTransactions'
+import { useModalA11y } from '@/hooks/useModalA11y'
 
 type CreateRuleModalProps = {
   transaction: TransactionRow
@@ -26,6 +28,16 @@ export function CreateRuleModal({
   onFormChange,
   onSubmit,
 }: CreateRuleModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null)
+  const canonicalMerchantInputRef = useRef<HTMLInputElement>(null)
+
+  useModalA11y({
+    open: true,
+    onClose,
+    containerRef: modalRef,
+    initialFocusRef: canonicalMerchantInputRef,
+  })
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 p-4 sm:items-center"
@@ -33,7 +45,7 @@ export function CreateRuleModal({
       aria-modal="true"
       aria-labelledby="create-transaction-rule-title"
     >
-      <div className="my-4 w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl sm:my-0">
+      <div ref={modalRef} tabIndex={-1} className="my-4 w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl sm:my-0">
         <h3 id="create-transaction-rule-title" className="text-lg font-semibold text-foreground">
           Create rule from transaction
         </h3>
@@ -80,6 +92,7 @@ export function CreateRuleModal({
               Canonical merchant
             </label>
             <input
+              ref={canonicalMerchantInputRef}
               id="create-rule-canonical-merchant"
               type="text"
               value={ruleForm.canonicalMerchant}
@@ -98,7 +111,7 @@ export function CreateRuleModal({
                   type="button"
                   disabled={ruleModalSubmitting}
                   onClick={() => onFormChange({ matchType: type })}
-                  className={`rounded-md border px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`min-h-11 rounded-md border px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:px-3 md:py-1.5 ${
                     ruleForm.matchType === type
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border text-foreground hover:bg-muted'
@@ -180,7 +193,7 @@ export function CreateRuleModal({
             type="button"
             disabled={ruleModalSubmitting}
             onClick={onClose}
-            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="min-h-11 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 md:py-1.5"
           >
             Cancel
           </button>
@@ -188,7 +201,7 @@ export function CreateRuleModal({
             type="button"
             disabled={ruleModalSubmitting}
             onClick={onSubmit}
-            className="rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="min-h-11 rounded-md border border-primary bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-9 md:py-1.5"
           >
             {ruleModalSubmitting ? 'Saving...' : 'Create rule'}
           </button>

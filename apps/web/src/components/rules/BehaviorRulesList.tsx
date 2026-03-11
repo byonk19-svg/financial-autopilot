@@ -28,7 +28,7 @@ export function BehaviorRulesList({
             <div key={row.id} className="rounded-lg border border-border bg-card p-3">
               <p className="text-sm text-foreground">{friendlyRuleSummary(row)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Priority {row.priority} • {row.cadence ?? 'Any cadence'} • Updated {formatTime(row.updated_at)}
+                Priority {row.priority} | {row.cadence ?? 'Any cadence'} | Updated {formatTime(row.updated_at)}
               </p>
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">Advanced details</summary>
@@ -44,7 +44,7 @@ export function BehaviorRulesList({
                   type="button"
                   onClick={() => void onToggleRule(row)}
                   disabled={saving}
-                  className="rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-11 rounded-md border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
                 >
                   {row.is_active ? 'Disable' : 'Enable'}
                 </button>
@@ -52,7 +52,7 @@ export function BehaviorRulesList({
                   type="button"
                   onClick={() => void onDeleteRule(row)}
                   disabled={saving}
-                  className="rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-600 transition-colors-fast hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-11 rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors-fast hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
                 >
                   Delete
                 </button>
@@ -64,3 +64,4 @@ export function BehaviorRulesList({
     </div>
   )
 }
+

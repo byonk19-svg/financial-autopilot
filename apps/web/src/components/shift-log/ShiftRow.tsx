@@ -29,7 +29,7 @@ export default function ShiftRow({ shift, employer, location, onEdit, onDuplicat
             type="button"
             onClick={() => onEdit(shift)}
             disabled={busy}
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
           >
             Edit
           </button>
@@ -37,7 +37,7 @@ export default function ShiftRow({ shift, employer, location, onEdit, onDuplicat
             type="button"
             onClick={() => onDuplicate(shift)}
             disabled={busy}
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
           >
             Duplicate
           </button>
@@ -45,7 +45,7 @@ export default function ShiftRow({ shift, employer, location, onEdit, onDuplicat
             type="button"
             onClick={() => onDelete(shift.id)}
             disabled={busy}
-            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
           >
             {busy ? 'Working...' : 'Remove'}
           </button>
@@ -64,7 +64,7 @@ export default function ShiftRow({ shift, employer, location, onEdit, onDuplicat
         <div className="col-span-2">
           <p className="text-xs text-muted-foreground">Notes</p>
           <p className="font-medium text-foreground">
-            {shift.is_non_pay ? 'Non-pay day' : shift.notes?.trim() ? shift.notes : '—'}
+            {shift.is_non_pay ? 'Non-pay day' : shift.notes?.trim() ? shift.notes : 'ï¿½'}
           </p>
         </div>
       </div>

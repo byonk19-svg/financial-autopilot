@@ -31,13 +31,13 @@ export function AliasRulesList({
                 If transaction text <strong>{row.match_type}</strong> "<strong>{row.pattern}</strong>", rename merchant to{' '}
                 <strong>{row.normalized}</strong>.
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">Priority {row.priority} • Updated {formatTime(row.updated_at)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Priority {row.priority} | Updated {formatTime(row.updated_at)}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => void onToggleAlias(row)}
                   disabled={saving}
-                  className="rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-11 rounded-md border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
                 >
                   {row.is_active ? 'Disable' : 'Enable'}
                 </button>
@@ -45,7 +45,7 @@ export function AliasRulesList({
                   type="button"
                   onClick={() => void onDeleteAlias(row)}
                   disabled={saving}
-                  className="rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-600 transition-colors-fast hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-11 rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors-fast hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 md:min-h-9 md:px-2.5 md:py-1.5 md:text-xs"
                 >
                   Delete
                 </button>
@@ -57,3 +57,4 @@ export function AliasRulesList({
     </div>
   )
 }
+

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useModalA11y } from '../hooks/useModalA11y'
 import { captureException } from '../lib/errorReporting'
 import { getLoginRedirectPath } from '../lib/loginRedirect'
 import { supabase } from '../lib/supabase'
@@ -19,6 +20,8 @@ export default function Settings() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const confirmModalRef = useRef<HTMLDivElement>(null)
+  const confirmInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!loading && !session?.user) {
@@ -44,6 +47,13 @@ export default function Settings() {
     () => confirmText.trim() === 'DELETE' && !isSubmitting,
     [confirmText, isSubmitting],
   )
+
+  useModalA11y({
+    open: isConfirmOpen,
+    onClose: closeConfirmModal,
+    containerRef: confirmModalRef,
+    initialFocusRef: confirmInputRef,
+  })
 
   const onPurgeData = useCallback(async () => {
     if (!canConfirmDelete) return
@@ -122,7 +132,7 @@ export default function Settings() {
           aria-modal="true"
           aria-labelledby="delete-data-title"
         >
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
+          <div ref={confirmModalRef} tabIndex={-1} className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
             <h3 id="delete-data-title" className="text-lg font-semibold text-foreground">
               Confirm data deletion
             </h3>
@@ -135,13 +145,13 @@ export default function Settings() {
               Confirmation text
             </label>
             <input
+              ref={confirmInputRef}
               id="delete-confirm-input"
               type="text"
               value={confirmText}
               onChange={(event) => setConfirmText(event.target.value)}
               className="mt-2 w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
               placeholder="Type DELETE"
-              autoFocus
             />
 
             {errorMessage ? (
