@@ -15,6 +15,13 @@ import {
 } from "../_shared/owner_rules_v1.ts";
 import { evaluateRulesV1, type CategoryRuleV1, type TransactionRuleInputV1 } from "../_shared/rules_v1.ts";
 import { fetchAccounts } from "../_shared/simplefin.ts";
+import {
+  buildBackfillWindows,
+  DEFAULT_LOOKBACK_DAYS,
+  emptySyncRequestOptions,
+  parseSyncRequestOptionsBody,
+  type SyncRequestOptions,
+} from "../_shared/simplefin_sync_options.ts";
 
 const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } =
   getSupabaseConfig();
@@ -88,11 +95,6 @@ type TransactionMatchRow = {
 const STALE_PENDING_DAYS = 7;
 const PENDING_MATCH_WINDOW_DAYS = 10;
 const AMOUNT_EPSILON = 0.01;
-const MAX_FORCE_ARCHIVE_PENDING_DAYS = 90;
-
-type SyncRequestOptions = {
-  forceArchivePendingDays: number | null;
-};
 
 function json(req: Request, data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -179,7 +181,7 @@ function addDays(isoDate: string, days: number): string {
 async function parseSyncRequestOptions(req: Request): Promise<SyncRequestOptions> {
   const contentLength = req.headers.get("content-length");
   if (contentLength === "0") {
-    return { forceArchivePendingDays: null };
+    return emptySyncRequestOptions();
   }
 
   let body: unknown = null;
@@ -187,33 +189,15 @@ async function parseSyncRequestOptions(req: Request): Promise<SyncRequestOptions
     body = await req.json();
   } catch {
     // Allow empty body and non-JSON callers.
-    return { forceArchivePendingDays: null };
+    return emptySyncRequestOptions();
   }
 
-  const record = asRecord(body);
-  if (!record) {
-    return { forceArchivePendingDays: null };
+  try {
+    return parseSyncRequestOptionsBody(body);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid request body.";
+    throw new HttpError(400, message);
   }
-
-  const rawValue = record.force_archive_pending_days;
-  if (rawValue === undefined || rawValue === null || rawValue === "") {
-    return { forceArchivePendingDays: null };
-  }
-
-  const parsedValue = typeof rawValue === "number"
-    ? rawValue
-    : typeof rawValue === "string"
-    ? Number.parseInt(rawValue, 10)
-    : Number.NaN;
-
-  if (!Number.isFinite(parsedValue) || parsedValue < 1 || parsedValue > MAX_FORCE_ARCHIVE_PENDING_DAYS) {
-    throw new HttpError(
-      400,
-      `force_archive_pending_days must be an integer between 1 and ${MAX_FORCE_ARCHIVE_PENDING_DAYS}.`,
-    );
-  }
-
-  return { forceArchivePendingDays: Math.trunc(parsedValue) };
 }
 
 function truncate(input: string, maxLength: number): string {
@@ -444,30 +428,6 @@ function addCalendarDays(input: Date, days: number): Date {
   const copy = new Date(input.toISOString());
   copy.setUTCDate(copy.getUTCDate() + days);
   return copy;
-}
-
-function buildBackfillWindows(retentionMonths: number): Array<{ startDate: number; endDate: number }> {
-  const now = new Date();
-  const start = new Date(now.toISOString());
-  start.setUTCMonth(start.getUTCMonth() - retentionMonths);
-
-  const windows: Array<{ startDate: number; endDate: number }> = [];
-  let cursor = new Date(start.toISOString());
-
-  while (cursor <= now) {
-    const windowStart = new Date(cursor.toISOString());
-    const windowEndCandidate = addCalendarDays(windowStart, 59);
-    const windowEnd = windowEndCandidate < now ? windowEndCandidate : now;
-
-    windows.push({
-      startDate: toUnixSeconds(windowStart),
-      endDate: toUnixSeconds(windowEnd),
-    });
-
-    cursor = addCalendarDays(windowEnd, 1);
-  }
-
-  return windows;
 }
 
 async function getTransactionCountForUser(
@@ -912,7 +872,7 @@ Deno.serve(async (req) => {
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
-  let options: SyncRequestOptions = { forceArchivePendingDays: null };
+  let options: SyncRequestOptions = emptySyncRequestOptions();
   try {
     options = await parseSyncRequestOptions(req);
   } catch (error) {
@@ -1016,7 +976,12 @@ Deno.serve(async (req) => {
       try {
         const payloads: unknown[] = [];
         const pendingCleanupKeys = new Set<string>();
-        payloads.push(await fetchAccounts(accessUrl, { pending: true }));
+        const lookbackDays = options.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
+        const lookbackStart = addCalendarDays(new Date(), -lookbackDays);
+        payloads.push(await fetchAccounts(accessUrl, {
+          pending: true,
+          startDate: toUnixSeconds(lookbackStart),
+        }));
 
         if (mode === "manual") {
           const cachedCount = userTransactionCountCache.get(connection.user_id);
@@ -1024,9 +989,17 @@ Deno.serve(async (req) => {
             await getTransactionCountForUser(adminClient, connection.user_id);
           userTransactionCountCache.set(connection.user_id, currentTransactionCount);
 
-          // Backfill in 60-day windows for new users or near-empty histories.
-          if (currentTransactionCount < 50) {
-            const windows = buildBackfillWindows(userPreference.retentionMonths);
+          // Backfill in 60-day windows:
+          // - automatic for new/near-empty histories
+          // - optional "repair" backfill when requested via backfill_months
+          const requestedBackfillMonths = options.backfillMonths;
+          const shouldBackfill = currentTransactionCount < 50 || requestedBackfillMonths !== null;
+          if (shouldBackfill) {
+            const monthsToBackfill = Math.min(
+              requestedBackfillMonths ?? userPreference.retentionMonths,
+              userPreference.retentionMonths,
+            );
+            const windows = buildBackfillWindows(monthsToBackfill);
             for (const window of windows) {
               try {
                 payloads.push(await fetchAccounts(accessUrl, {
