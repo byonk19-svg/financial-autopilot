@@ -35,7 +35,7 @@ test.describe('accessibility checks (unauthenticated)', () => {
   test('transactions redirect login page has no serious WCAG A/AA violations', async ({ page }) => {
     await page.goto('/transactions')
     await expect.poll(() => new URL(page.url()).pathname).toBe('/login')
-    await expect(page.getByText('Choose a login method.')).toBeVisible()
+    await expect(page.getByText('Choose your sign-in method to continue.')).toBeVisible()
     await expectNoSeriousA11yViolations(page, '/login?next=/transactions')
   })
 })

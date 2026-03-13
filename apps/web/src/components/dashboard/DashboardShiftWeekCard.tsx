@@ -33,7 +33,7 @@ export function DashboardShiftWeekCard({ shiftSummary, shiftLoading }: Dashboard
   const maxBreakdownPay = shiftBreakdown.reduce((max, row) => Math.max(max, toNumber(row.gross_pay ?? null)), 0)
 
   return (
-    <Card className="md:col-span-2 motion-fade-up motion-stagger-2">
+    <Card className="md:col-span-2 border-border/75 bg-card/95 shadow-[0_10px_24px_-22px_hsl(var(--foreground)/0.35)]">
       <CardHeader className="pb-4 sm:pb-5">
         <CardTitle className="text-base font-semibold tracking-tight sm:text-lg">
           {shiftSummary
@@ -59,7 +59,7 @@ export function DashboardShiftWeekCard({ shiftSummary, shiftLoading }: Dashboard
             description="As shifts are added, weekly totals and employer breakdown will appear here."
           />
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-border/80 bg-background/35">
+          <div className="overflow-x-auto rounded-xl border border-border/75 bg-background/20">
             <Table>
               <TableHeader>
                 <TableRow>

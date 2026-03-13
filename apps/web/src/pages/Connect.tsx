@@ -10,7 +10,7 @@ const PENDING_SETUP_TOKEN_KEY = 'financial-autopilot:pending-setup-token'
 
 function LinkIcon() {
   return (
-    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary shadow-[0_14px_24px_-16px_hsl(var(--primary)/0.85)]">
       <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden="true">
         <path
           d="M10 13.5 14 9.5M7.5 16a3.5 3.5 0 0 1 0-5l2-2a3.5 3.5 0 0 1 5 5M16.5 8a3.5 3.5 0 0 1 0 5l-2 2a3.5 3.5 0 0 1-5-5"
@@ -128,21 +128,21 @@ export default function Connect() {
   }
 
   return (
-    <section className="mx-auto max-w-lg rounded-xl border border-border bg-card p-6 shadow-sm">
+    <section className="page-hero mx-auto max-w-lg">
       <LinkIcon />
       <h1 className="text-center text-2xl font-semibold text-foreground">Connect SimpleFIN</h1>
       <p className="mt-2 text-center text-sm text-muted-foreground">
         Paste your setup token from the SimpleFIN Bridge create page.
       </p>
 
-      <div className="mt-4 rounded-lg border border-border bg-muted/30 px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-        Step 1: Get token <span className="px-1">→</span> Step 2: Paste below <span className="px-1">→</span> Step
+      <div className="mt-4 rounded-lg border border-border/80 bg-muted/25 px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+        Step 1: Get token <span className="px-1">-&gt;</span> Step 2: Paste below <span className="px-1">-&gt;</span> Step
         3: Connect
       </div>
 
       <form className="mt-6 space-y-4" onSubmit={onConnect}>
         <label className="block text-sm font-medium text-foreground" htmlFor="setupToken">
-          Setup Token
+          Setup token
         </label>
         <textarea
           id="setupToken"
@@ -151,7 +151,7 @@ export default function Connect() {
           value={setupToken}
           onChange={(event) => setSetupToken(event.target.value)}
           placeholder="Paste setup token here"
-          className="w-full rounded-lg border border-border px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+          className="field-control w-full"
         />
 
         <div className="flex items-center gap-3">
@@ -164,7 +164,7 @@ export default function Connect() {
           </button>
           <Link
             to="/dashboard"
-            className="text-sm font-medium text-primary underline-offset-2 transition-colors-fast hover:text-primary/80 hover:underline"
+            className="text-sm font-semibold text-primary underline-offset-2 transition-colors-fast hover:text-primary/80 hover:underline"
           >
             Skip to dashboard
           </Link>

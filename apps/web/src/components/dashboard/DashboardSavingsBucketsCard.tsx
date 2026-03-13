@@ -26,7 +26,7 @@ export function DashboardSavingsBucketsCard({ savingsSummary, savingsLoading }: 
   const savingsBuckets = savingsSummary?.buckets ?? []
 
   return (
-    <Card className="motion-fade-up motion-stagger-3">
+    <Card className="border-border/75 bg-card/95 shadow-[0_10px_24px_-22px_hsl(var(--foreground)/0.35)]">
       <CardHeader className="pb-4">
         <CardTitle className="text-base font-semibold">Savings Buckets</CardTitle>
       </CardHeader>
@@ -39,7 +39,7 @@ export function DashboardSavingsBucketsCard({ savingsSummary, savingsLoading }: 
           </div>
         ) : (
           <>
-            <div className="rounded-xl border border-border/75 bg-muted/40 p-3.5">
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Total saved</p>
               <p className="text-2xl font-semibold text-foreground">
                 {formatCurrency(toNumber(savingsSummary?.total_saved ?? null))}
@@ -65,7 +65,7 @@ export function DashboardSavingsBucketsCard({ savingsSummary, savingsLoading }: 
                   return (
                     <div
                       key={bucket.bucket_id}
-                      className="space-y-2 rounded-xl border border-border/85 bg-background/35 p-3 transition-colors duration-150 hover:bg-background/60"
+                      className="space-y-2 rounded-xl border border-border/75 bg-background/25 p-3"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-medium text-foreground">{bucket.name}</p>

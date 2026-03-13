@@ -89,14 +89,14 @@ export default function Settings() {
 
   return (
     <section className="mx-auto max-w-3xl space-y-6">
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <div className="page-hero">
         <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Manage account-level preferences and destructive actions.
         </p>
       </div>
 
-      <div className="rounded-xl border border-red-200 bg-red-50/40 p-6 shadow-sm">
+      <div className="section-surface border-red-200/80 bg-red-50/50 p-6">
         <h2 className="text-lg font-semibold text-red-700">Danger Zone</h2>
         <p className="mt-2 text-sm text-red-700/90">
           Delete all your synced data, rules, categories, alerts, insights, and recurring settings.
@@ -106,7 +106,7 @@ export default function Settings() {
           <button
             type="button"
             onClick={openConfirmModal}
-            className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition-colors-fast hover:bg-red-50"
+            className="rounded-lg border border-red-300 bg-card px-4 py-2 text-sm font-semibold text-red-700 transition-colors-fast hover:bg-red-100/70"
           >
             Delete my data
           </button>
@@ -132,7 +132,7 @@ export default function Settings() {
           aria-modal="true"
           aria-labelledby="delete-data-title"
         >
-          <div ref={confirmModalRef} tabIndex={-1} className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-lg">
+          <div ref={confirmModalRef} tabIndex={-1} className="panel-soft w-full max-w-md p-6">
             <h3 id="delete-data-title" className="text-lg font-semibold text-foreground">
               Confirm data deletion
             </h3>
@@ -165,7 +165,7 @@ export default function Settings() {
                 type="button"
                 onClick={closeConfirmModal}
                 disabled={isSubmitting}
-                className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-soft disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </button>

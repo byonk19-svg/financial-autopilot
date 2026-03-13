@@ -10,7 +10,7 @@ import { useSession } from '../lib/session'
 function DollarLogo() {
   return (
     <div className="mx-auto flex flex-col items-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_14px_26px_-16px_hsl(var(--primary)/0.9)]">
         <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden="true">
           <path
             d="M12 3v18M15.5 7.5c0-1.4-1.6-2.5-3.5-2.5s-3.5 1.1-3.5 2.5 1.6 2.5 3.5 2.5 3.5 1.1 3.5 2.5-1.6 2.5-3.5 2.5-3.5-1.1-3.5-2.5"
@@ -113,21 +113,21 @@ export default function Login() {
 
   if (loading || redirecting) {
     return (
-      <section className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
+      <section className="page-hero mx-auto max-w-md">
         <DollarLogo />
         <h1 className="mt-5 text-center text-2xl font-semibold text-foreground">Login</h1>
-        <p className="mt-2 text-center text-sm text-foreground/80">Checking your session...</p>
+        <p className="mt-2 text-center text-sm text-muted-foreground">Checking your session...</p>
       </section>
     )
   }
 
   return (
-    <section className="mx-auto max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
+    <section className="page-hero mx-auto max-w-md">
       <DollarLogo />
       <h1 className="mt-5 text-center text-2xl font-semibold text-foreground">Login</h1>
-      <p className="mt-2 text-center text-sm text-foreground/80">Choose a login method.</p>
+      <p className="mt-2 text-center text-sm text-muted-foreground">Choose your sign-in method to continue.</p>
 
-      <div className="mt-4 inline-flex w-full rounded-lg border border-border p-1">
+      <div className="mt-4 inline-flex w-full rounded-lg border border-border/80 bg-muted/20 p-1">
         <button
           type="button"
           onClick={() => {
@@ -135,10 +135,10 @@ export default function Login() {
             setMessage('')
             setStatus('idle')
           }}
-          className={`min-h-11 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors-fast ${
+          className={`min-h-11 flex-1 rounded-md px-3 py-2 text-sm font-semibold transition-colors-fast ${
               mode === 'password'
-              ? 'bg-[hsl(158_35%_34%)] text-primary-foreground'
-              : 'bg-transparent text-foreground/80 hover:bg-accent'
+              ? 'bg-primary text-primary-foreground shadow-[0_10px_20px_-14px_hsl(var(--primary)/0.9)]'
+              : 'bg-transparent text-muted-foreground hover:bg-card hover:text-foreground'
           }`}
         >
           Password
@@ -150,10 +150,10 @@ export default function Login() {
             setMessage('')
             setStatus('idle')
           }}
-          className={`min-h-11 flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors-fast ${
+          className={`min-h-11 flex-1 rounded-md px-3 py-2 text-sm font-semibold transition-colors-fast ${
               mode === 'magic'
-              ? 'bg-[hsl(158_35%_34%)] text-primary-foreground'
-              : 'bg-transparent text-foreground/80 hover:bg-accent'
+              ? 'bg-primary text-primary-foreground shadow-[0_10px_20px_-14px_hsl(var(--primary)/0.9)]'
+              : 'bg-transparent text-muted-foreground hover:bg-card hover:text-foreground'
           }`}
         >
           Magic Link
@@ -173,7 +173,7 @@ export default function Login() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
-            className="w-full rounded-lg border border-border px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+            className="field-control w-full"
           />
         </div>
 
@@ -189,7 +189,7 @@ export default function Login() {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-border px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+              className="field-control w-full"
             />
           </div>
         )}
@@ -197,7 +197,7 @@ export default function Login() {
         <button
           type="submit"
           disabled={status === 'sending'}
-          className="min-h-11 rounded-lg bg-[hsl(158_35%_34%)] px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors-fast hover:bg-[hsl(158_35%_31%)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-h-11 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors-fast hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {status === 'sending'
             ? mode === 'password'
@@ -210,11 +210,11 @@ export default function Login() {
       </form>
 
       {mode === 'password' ? (
-        <p className="mt-3 text-xs text-foreground/80">
+        <p className="mt-3 text-xs text-muted-foreground">
           If you do not have a password yet, set one in Supabase Dashboard &gt; Authentication &gt; Users.
         </p>
       ) : (
-        <p className="mt-3 text-xs text-foreground/80">
+        <p className="mt-3 text-xs text-muted-foreground">
           Use magic link when email delivery is configured and not rate-limited.
         </p>
       )}

@@ -71,7 +71,7 @@ export default function ShiftLog() {
   return (
     <section className="space-y-6">
       {/* Header */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <div className="page-hero">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Shift Log</h1>
@@ -87,7 +87,7 @@ export default function ShiftLog() {
                   void onQuickAddRecent()
                 }}
                 disabled={saving || quickAdding}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-soft px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {quickAdding ? 'Adding...' : 'Add last shift'}
               </button>
@@ -164,7 +164,7 @@ export default function ShiftLog() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Weekly goal settings */}
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="section-surface p-5">
           <h2 className="text-lg font-semibold text-foreground">Weekly goal settings</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-sm">
@@ -175,7 +175,7 @@ export default function ShiftLog() {
                 min="0"
                 value={goalDraft}
                 onChange={(event) => setGoalDraft(event.target.value)}
-                className="w-full rounded-lg border border-input px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                className="field-control w-full"
               />
             </label>
             <label className="space-y-1 text-sm">
@@ -183,7 +183,7 @@ export default function ShiftLog() {
               <select
                 value={weekStartsDraft}
                 onChange={(event) => setWeekStartsDraft(event.target.value === '1' ? 1 : 0)}
-                className="w-full rounded-lg border border-input px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                className="field-control w-full"
               >
                 {weekStartOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -199,7 +199,7 @@ export default function ShiftLog() {
               void onSavePreferences()
             }}
             disabled={saving}
-            className="mt-3 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors-fast hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn-soft mt-3 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Save preferences
           </button>

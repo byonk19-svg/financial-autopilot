@@ -5,7 +5,7 @@ import { getSupabaseConfig } from "../_shared/env.ts";
 const { url: SUPABASE_URL, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY } = getSupabaseConfig();
 
 const ALLOW_HEADERS = "authorization, x-client-info, apikey, content-type";
-const ALLOW_METHODS = "GET, POST, OPTIONS";
+const ALLOW_METHODS = "GET, OPTIONS";
 const FUNCTION_NAME = "system-health";
 
 const TRACKED_JOBS = [
@@ -68,6 +68,33 @@ function errorInfo(error: unknown): { message: string; stack: string | null } {
     message: typeof error === "string" ? error : "unknown_error",
     stack: null,
   };
+}
+
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
+  if (!authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.slice("Bearer ".length).trim();
+  return token.length > 0 ? token : null;
+}
+
+async function resolveAuthorizedUserId(
+  admin: ReturnType<typeof createClient>,
+  req: Request,
+): Promise<string | null> {
+  const token = getBearerToken(req);
+  if (!token) {
+    return null;
+  }
+
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) {
+    return null;
+  }
+
+  return data.user.id;
 }
 
 async function getCronHealth(admin: ReturnType<typeof createClient>): Promise<{
@@ -159,7 +186,7 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (req.method !== "GET" && req.method !== "POST") {
+  if (req.method !== "GET") {
     return json(req, { error: "Method not allowed." }, 405);
   }
 
@@ -168,6 +195,11 @@ Deno.serve(async (req) => {
   });
 
   try {
+    const userId = await resolveAuthorizedUserId(admin, req);
+    if (!userId) {
+      return json(req, { error: "Unauthorized." }, 401);
+    }
+
     const cronHealth = await getCronHealth(admin);
 
     return json(req, {

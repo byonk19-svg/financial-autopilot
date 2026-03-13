@@ -53,11 +53,11 @@ export default function Alerts() {
   } = useAlerts()
 
   return (
-    <section className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <section className="space-y-5">
+      <div className="page-hero">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold text-foreground">Alerts</h1>
-          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+          <span className="rounded-full border border-border/70 bg-muted/30 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
             {alerts.length}
           </span>
         </div>
@@ -67,7 +67,7 @@ export default function Alerts() {
         </p>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="section-surface p-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
@@ -121,7 +121,7 @@ export default function Alerts() {
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="section-surface p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-medium text-foreground">{selectedIds.length} selected</p>
             <div className="flex flex-wrap gap-2">
@@ -147,7 +147,7 @@ export default function Alerts() {
       )}
 
       {!fetching && alerts.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="section-surface p-4">
           <label className="inline-flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
@@ -163,7 +163,7 @@ export default function Alerts() {
       <div className="space-y-3">
         {fetching ? (
           Array.from({ length: 3 }).map((_, index) => (
-            <article key={index} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <article key={index} className="section-surface p-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-6 w-14 animate-pulse rounded-md bg-muted" />
@@ -181,7 +181,7 @@ export default function Alerts() {
             </article>
           ))
         ) : alerts.length === 0 ? (
-          <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+          <div className="section-surface flex min-h-[220px] flex-col items-center justify-center p-6 text-center">
             <CheckCircleIcon className="h-10 w-10 text-muted-foreground/60" />
             <p className="mt-3 text-base font-medium text-foreground">All clear - no active alerts</p>
           </div>

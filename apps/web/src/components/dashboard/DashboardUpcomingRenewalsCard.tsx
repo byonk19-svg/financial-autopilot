@@ -24,7 +24,7 @@ type DashboardUpcomingRenewalsCardProps = {
 
 export function DashboardUpcomingRenewalsCard({ upcomingRenewals }: DashboardUpcomingRenewalsCardProps) {
   return (
-    <Card className="motion-fade-up motion-stagger-4">
+    <Card className="border-border/75 bg-card/95 shadow-[0_10px_24px_-22px_hsl(var(--foreground)/0.35)]">
       <CardHeader className="pb-4">
         <CardTitle className="text-base font-semibold">Upcoming Renewals</CardTitle>
       </CardHeader>
@@ -41,7 +41,7 @@ export function DashboardUpcomingRenewalsCard({ upcomingRenewals }: DashboardUpc
             {upcomingRenewals.map((renewal) => (
               <li
                 key={renewal.subscription_id}
-                className="rounded-xl border border-border/85 bg-background/35 p-3 transition-colors duration-150 hover:bg-background/65"
+                className="rounded-xl border border-border/75 bg-background/20 p-3"
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium text-foreground">{renewal.merchant_normalized}</p>

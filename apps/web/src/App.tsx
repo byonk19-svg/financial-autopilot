@@ -52,34 +52,106 @@ const ShiftLogPage = lazy(loadShiftLogPage)
 const RulesPage = lazy(loadRulesPage)
 const SettingsPage = lazy(loadSettingsPage)
 
-type NavItem = { to: string; label: string; icon: LucideIcon; preload?: () => Promise<unknown> }
+type NavItem = {
+  to: string
+  label: string
+  description: string
+  icon: LucideIcon
+  preload?: () => Promise<unknown>
+}
 type NavGroup = { label: string; items: NavItem[] }
 
 const navGroups: NavGroup[] = [
   {
     label: 'Overview',
     items: [
-      { to: '/', label: 'Dashboard', icon: Gauge, preload: loadDashboardPage },
-      { to: '/transactions', label: 'Transactions', icon: ArrowLeftRight, preload: loadTransactionsPage },
-      { to: '/cash-flow', label: 'Cash Flow', icon: ActivitySquare, preload: loadCashFlowPage },
-      { to: '/overview', label: 'Accounts', icon: Landmark, preload: loadOverviewPage },
+      {
+        to: '/',
+        label: 'Dashboard',
+        description: 'Quick health and priority actions for this month.',
+        icon: Gauge,
+        preload: loadDashboardPage,
+      },
+      {
+        to: '/transactions',
+        label: 'Transactions',
+        description: 'Categorize and review imported spending activity.',
+        icon: ArrowLeftRight,
+        preload: loadTransactionsPage,
+      },
+      {
+        to: '/cash-flow',
+        label: 'Cash Flow',
+        description: 'Project checking balance with bills and paychecks.',
+        icon: ActivitySquare,
+        preload: loadCashFlowPage,
+      },
+      {
+        to: '/overview',
+        label: 'Accounts',
+        description: 'Track balances and ownership across linked accounts.',
+        icon: Landmark,
+        preload: loadOverviewPage,
+      },
     ],
   },
   {
     label: 'Automation',
     items: [
-      { to: '/subscriptions', label: 'Recurring', icon: CalendarClock, preload: loadSubscriptionsPage },
-      { to: '/alerts', label: 'Alerts', icon: Bell, preload: loadAlertsPage },
+      {
+        to: '/subscriptions',
+        label: 'Recurring',
+        description: 'Review recurring charges and subscription classifications.',
+        icon: CalendarClock,
+        preload: loadSubscriptionsPage,
+      },
+      {
+        to: '/alerts',
+        label: 'Alerts',
+        description: 'Investigate unusual charges and spending anomalies.',
+        icon: Bell,
+        preload: loadAlertsPage,
+      },
     ],
   },
   {
     label: 'Config',
     items: [
-      { to: '/rules', label: 'Rules', icon: Workflow, preload: loadRulesPage },
-      { to: '/auto-rules', label: 'Auto Rules', icon: Sparkles, preload: loadAutoRulesPage },
-      { to: '/classification-rules', label: 'Recurring Rules', icon: Sparkles, preload: loadClassificationRulesPage },
-      { to: '/shift-log', label: 'Shift Log', icon: CalendarClock, preload: loadShiftLogPage },
-      { to: '/settings', label: 'Settings', icon: SettingsIcon, preload: loadSettingsPage },
+      {
+        to: '/rules',
+        label: 'Rules',
+        description: 'Manage manual rule behavior and aliases.',
+        icon: Workflow,
+        preload: loadRulesPage,
+      },
+      {
+        to: '/auto-rules',
+        label: 'Auto Rules',
+        description: 'Set sync-time category and owner automation rules.',
+        icon: Sparkles,
+        preload: loadAutoRulesPage,
+      },
+      {
+        to: '/classification-rules',
+        label: 'Recurring Rules',
+        description: 'Adjust recurring classification behavior.',
+        icon: Sparkles,
+        preload: loadClassificationRulesPage,
+      },
+      {
+        to: '/shift-log',
+        label: 'Shift Log',
+        description: 'Track shift income, goals, and employer mix.',
+        icon: CalendarClock,
+        preload: loadShiftLogPage,
+      },
+      {
+        to: '/settings',
+        label: 'Settings',
+        description: 'Manage account preferences and data controls.',
+        icon: SettingsIcon,
+        preload: loadSettingsPage,
+      },
     ],
   },
 ]
@@ -128,11 +200,11 @@ export default function App() {
     return location.pathname.startsWith(to)
   }
 
-  const currentPageLabel = (
-    navItems
-      .filter((item) => isActive(item.to))
-      .sort((a, b) => b.to.length - a.to.length)[0]?.label ?? 'Dashboard'
-  )
+  const currentNavItem = navItems
+    .filter((item) => isActive(item.to))
+    .sort((a, b) => b.to.length - a.to.length)[0]
+  const currentPageLabel = currentNavItem?.label ?? 'Dashboard'
+  const currentPageDescription = currentNavItem?.description ?? 'Household finance overview'
 
   const navItemClass = (to: string): string =>
     `group inline-flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background md:min-h-9 md:py-1.5 ${
@@ -273,6 +345,7 @@ export default function App() {
                 <div className="hidden min-w-0 sm:block">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{monthLabel}</p>
                   <p className="truncate text-sm font-semibold text-foreground">{currentPageLabel}</p>
+                  <p className="mt-0.5 max-w-[32ch] truncate text-xs text-muted-foreground">{currentPageDescription}</p>
                 </div>
 
                 <div className="relative min-w-[220px] flex-1 sm:min-w-[280px]">

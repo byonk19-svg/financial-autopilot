@@ -20,7 +20,7 @@ test('transactions route redirects unauthenticated users to login', async ({ pag
   await expect
     .poll(() => new URL(page.url()).searchParams.get('next'))
     .toBe('/transactions')
-  await expect(page.getByText('Choose a login method.')).toBeVisible()
+  await expect(page.getByText('Choose your sign-in method to continue.')).toBeVisible()
 })
 
 test('recurring route redirects unauthenticated users to login', async ({ page }) => {
@@ -30,5 +30,5 @@ test('recurring route redirects unauthenticated users to login', async ({ page }
   await expect
     .poll(() => new URL(page.url()).searchParams.get('next'))
     .toBe('/subscriptions')
-  await expect(page.getByText('Choose a login method.')).toBeVisible()
+  await expect(page.getByText('Choose your sign-in method to continue.')).toBeVisible()
 })

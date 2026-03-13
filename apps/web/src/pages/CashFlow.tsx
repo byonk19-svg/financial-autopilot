@@ -132,7 +132,7 @@ export default function CashFlow() {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <div className="page-hero">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Cash Flow</h1>
@@ -158,7 +158,7 @@ export default function CashFlow() {
                 clearMessages()
                 setMonthFromInput(event.target.value)
               }}
-              className="rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+              className="field-control"
             />
             <button
               type="button"
@@ -210,7 +210,7 @@ export default function CashFlow() {
 
       <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
         <div className="space-y-4">
-          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <section className="section-surface p-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Day-by-day ledger</h2>
             <div className="mt-3 space-y-2">
               {loading ? (
@@ -231,7 +231,7 @@ export default function CashFlow() {
         <div className="space-y-4">
           <BillCalendarSidebar bills={billsThisMonth} />
 
-          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <section className="section-surface p-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Month settings</h2>
             <div className="mt-3 space-y-2">
               <label className="space-y-1 text-sm">
@@ -241,7 +241,7 @@ export default function CashFlow() {
                   step="0.01"
                   value={openingBalanceDraft}
                   onChange={(event) => setOpeningBalanceDraft(event.target.value)}
-                  className="w-full rounded-lg border border-input px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  className="field-control"
                 />
               </label>
               <label className="space-y-1 text-sm">
@@ -251,7 +251,7 @@ export default function CashFlow() {
                   step="0.01"
                   value={lowThresholdDraft}
                   onChange={(event) => setLowThresholdDraft(event.target.value)}
-                  className="w-full rounded-lg border border-input px-3 py-2 text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  className="field-control"
                 />
               </label>
               <button
@@ -267,7 +267,7 @@ export default function CashFlow() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <section className="section-surface p-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Add recurring bill</h2>
             <div className="mt-3 grid gap-2">
               <label htmlFor="cash-flow-bill-name" className="space-y-1 text-sm">
@@ -277,7 +277,7 @@ export default function CashFlow() {
                   value={billForm.name}
                   onChange={(event) => setBillForm((current) => ({ ...current, name: event.target.value }))}
                   placeholder="Bill name"
-                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  className="field-control"
                 />
               </label>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -290,7 +290,7 @@ export default function CashFlow() {
                     value={billForm.amount}
                     onChange={(event) => setBillForm((current) => ({ ...current, amount: event.target.value }))}
                     placeholder="Amount"
-                    className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                    className="field-control"
                   />
                 </label>
                 <label htmlFor="cash-flow-bill-due-day" className="space-y-1 text-sm">
@@ -303,7 +303,7 @@ export default function CashFlow() {
                     value={billForm.dueDay}
                     onChange={(event) => setBillForm((current) => ({ ...current, dueDay: event.target.value }))}
                     placeholder="Due day (1-31)"
-                    className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                    className="field-control"
                   />
                 </label>
               </div>
@@ -319,7 +319,7 @@ export default function CashFlow() {
                         category: event.target.value as 'bill' | 'expense' | 'transfer',
                       }))
                     }
-                    className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                    className="field-control"
                   >
                     <option value="bill">Bill</option>
                     <option value="expense">Expense</option>
@@ -375,7 +375,7 @@ export default function CashFlow() {
             ) : null}
           </section>
 
-          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <section className="section-surface p-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Add projected income</h2>
             <div className="mt-3 grid gap-2">
               <label htmlFor="cash-flow-income-date" className="space-y-1 text-sm">
@@ -385,7 +385,7 @@ export default function CashFlow() {
                   type="date"
                   value={incomeForm.expectedDate}
                   onChange={(event) => setIncomeForm((current) => ({ ...current, expectedDate: event.target.value }))}
-                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  className="field-control"
                 />
               </label>
               <label htmlFor="cash-flow-income-amount" className="space-y-1 text-sm">
@@ -397,7 +397,7 @@ export default function CashFlow() {
                   value={incomeForm.amount}
                   onChange={(event) => setIncomeForm((current) => ({ ...current, amount: event.target.value }))}
                   placeholder="Amount"
-                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  className="field-control"
                 />
               </label>
               <label htmlFor="cash-flow-income-description" className="space-y-1 text-sm">
@@ -407,7 +407,7 @@ export default function CashFlow() {
                   value={incomeForm.description}
                   onChange={(event) => setIncomeForm((current) => ({ ...current, description: event.target.value }))}
                   placeholder="Description"
-                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  className="field-control"
                 />
               </label>
               <label htmlFor="cash-flow-income-employer" className="space-y-1 text-sm">
@@ -416,7 +416,7 @@ export default function CashFlow() {
                   id="cash-flow-income-employer"
                   value={incomeForm.employerId}
                   onChange={(event) => setIncomeForm((current) => ({ ...current, employerId: event.target.value }))}
-                  className="w-full rounded-lg border border-input px-3 py-2 text-sm text-foreground outline-none ring-ring transition focus:border-primary focus:ring-2"
+                  className="field-control"
                 >
                   <option value="">No employer</option>
                   {employers.map((employer) => (

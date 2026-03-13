@@ -19,10 +19,10 @@ function progressValue(rate: number | null): number {
 
 export function DashboardAutopilotMetricsCard({ metrics }: DashboardAutopilotMetricsCardProps) {
   return (
-    <Card className="border-[hsl(var(--primary)/0.35)] bg-[hsl(var(--primary)/0.08)] motion-fade-up motion-stagger-3">
+    <Card className="border-[hsl(var(--primary)/0.22)] bg-[hsl(var(--primary)/0.04)] shadow-[0_10px_24px_-22px_hsl(var(--foreground)/0.35)]">
       <CardHeader className="pb-3">
         <CardTitle className="inline-flex items-center gap-2 text-base font-semibold">
-          <Gauge className="h-4 w-4 text-primary" />
+          <Gauge className="h-4 w-4 text-primary/85" />
           Autopilot Coverage
         </CardTitle>
       </CardHeader>
@@ -39,11 +39,11 @@ export function DashboardAutopilotMetricsCard({ metrics }: DashboardAutopilotMet
         </div>
 
         <div className="grid gap-2 text-sm sm:grid-cols-2">
-          <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
+          <div className="rounded-lg border border-border/65 bg-muted/35 px-3 py-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Uncategorized (7d)</p>
             <p className="mt-1 font-semibold text-foreground">{metrics.uncategorizedCount7d}</p>
           </div>
-          <div className="rounded-lg border border-border/70 bg-card/70 px-3 py-2">
+          <div className="rounded-lg border border-border/65 bg-muted/35 px-3 py-2">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Manual fixes (7d)</p>
             <p className="mt-1 font-semibold text-foreground">{metrics.manualFixes7d}</p>
           </div>

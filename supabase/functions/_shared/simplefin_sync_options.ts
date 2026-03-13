@@ -1,6 +1,6 @@
 export const MAX_FORCE_ARCHIVE_PENDING_DAYS = 90;
-export const DEFAULT_LOOKBACK_DAYS = 90;
-export const MAX_LOOKBACK_DAYS = 365;
+export const DEFAULT_LOOKBACK_DAYS = 60;
+export const MAX_LOOKBACK_DAYS = 60;
 export const MAX_BACKFILL_MONTHS = 24;
 
 export type SyncRequestOptions = {
@@ -59,42 +59,4 @@ export function parseSyncRequestOptionsBody(body: unknown): SyncRequestOptions {
     lookbackDays: lookbackRaw,
     backfillMonths: backfillRaw,
   };
-}
-
-function toUnixSeconds(input: Date): number {
-  return Math.floor(input.getTime() / 1000);
-}
-
-function addCalendarDays(input: Date, days: number): Date {
-  const copy = new Date(input.toISOString());
-  copy.setUTCDate(copy.getUTCDate() + days);
-  return copy;
-}
-
-export function buildBackfillWindows(
-  retentionMonths: number,
-  nowInput: Date = new Date(),
-): Array<{ startDate: number; endDate: number }> {
-  const now = new Date(nowInput.toISOString());
-  const start = new Date(now.toISOString());
-  start.setUTCMonth(start.getUTCMonth() - retentionMonths);
-
-  const windows: Array<{ startDate: number; endDate: number }> = [];
-  let cursor = new Date(start.toISOString());
-
-  while (cursor < now) {
-    const windowStart = new Date(cursor.toISOString());
-    const windowEndCandidate = addCalendarDays(windowStart, 59);
-    const windowEnd = windowEndCandidate < now ? windowEndCandidate : now;
-
-    windows.push({
-      startDate: toUnixSeconds(windowStart),
-      endDate: toUnixSeconds(windowEnd),
-    });
-
-    // SimpleFIN end-date is exclusive; starting next window at windowEnd avoids gaps.
-    cursor = new Date(windowEnd.toISOString());
-  }
-
-  return windows;
 }

@@ -25,10 +25,10 @@ financial-autopilot/
 |        |- subscriptions/        # Subscription feature components
 |        |- shift-log/            # Shift log feature components
 |        |- transactions/         # Transaction filter components
-|     |- hooks/                   # Page/feature-level custom hooks (8 hooks)
+|     |- hooks/                   # Page/feature-level custom hooks (9 hooks)
 |     |- lib/                     # Utilities, clients, formatters (14 modules)
 |- supabase/
-|  |- migrations/                 # SQL migrations (0001â€”0053, never edit old ones)
+|  |- migrations/                 # SQL migrations (0001-0057, never edit old ones)
 |  |- functions/                  # Edge Functions (Deno)
 |     |- _shared/                 # Shared Deno utilities
 |     |- simplefin-sync/          # Bank account + transaction sync
@@ -184,7 +184,7 @@ This is a credit-card-first household.
 `accounts`:
 - `type` (from provider)
 - `owner` (`brianna | elaine | household`) â€” user-managed, never overwritten by sync
-- `is_credit` â€” DB-derived from account type
+- `is_credit` â€” DB-derived from account type by trigger; propagated to transactions by DB trigger
 
 `transactions`:
 - `owner` â€” inherited from account by DB trigger (with guard, never overwritten)
@@ -237,6 +237,10 @@ This means:
 | `0051` | Comcast/Xfinity canonical merchant name fix |
 | `0052` | `is_hidden` on transactions + `hide_similar_transactions` RPC + `set_is_hidden` on `transaction_rules` |
 | `0053` | Auto-generated rule bug fix: patch `match_type='equals'` to `'contains'` |
+| `0054` | `transaction_owner_rules_v1`: sync-time owner override rules |
+| `0055` | `spend_by_category(start_date, end_date)` RPC for dashboard charts |
+| `0056` | Transaction type autofill trigger/backfill for null `type` values |
+| `0057` | `accounts.is_credit` trigger derivation + propagation to `transactions.is_credit` |
 
 ## Non-Negotiable Behavior
 
@@ -249,7 +253,7 @@ This means:
 
 | Page | Route | Purpose |
 |------|-------|---------|
-| `Dashboard.tsx` | `/` | KPIs, insights, shift summary, system health |
+| `Dashboard.tsx` | `/` | KPIs, spend-by-category charts, insights, shift summary, data freshness, system health |
 | `Overview.tsx` | `/overview` | Account groups, bank sync status |
 | `Transactions.tsx` | `/transactions` | List with filter chips, bulk categorization (50/page) |
 | `CashFlow.tsx` | `/cash-flow` | Monthly ledger with bill templates + projected income |
@@ -276,6 +280,7 @@ This means:
 | `useClassificationRules.ts` | Auto-categorization rule CRUD and toggle |
 | `useTransactionFilterChips.ts` | Filter UI state (owner, type, category, date range) |
 | `useTransactionSelection.ts` | Multi-select transaction state for bulk operations |
+| `useSpendByCategory.ts` | Month-scoped category spend RPC fetch for dashboard charts |
 
 ## Lib Utilities (apps/web/src/lib/)
 
@@ -300,7 +305,7 @@ This means:
 
 | Function | Trigger | Purpose |
 |----------|---------|---------|
-| `simplefin-sync` | Manual/cron | Fetches accounts + transactions from SimpleFIN, applies rules v1 |
+| `simplefin-sync` | Manual/cron | Fetches accounts + transactions from SimpleFIN, applies rules v1, rolling lookback refresh, optional repair backfill |
 | `simplefin-connect` | Manual | OAuth token exchange + encrypted storage |
 | `analysis-daily` | Cron | KPIs, anomaly detection, alerts, subscription renewals |
 | `generate-weekly-insights` | Cron | Spending pattern insights (opportunities, warnings, projections) |
@@ -317,16 +322,19 @@ This means:
 | Module | Purpose |
 |--------|---------|
 | `rules_v1.ts` | Category rule matching (merchant_contains, merchant_exact, amount ranges) |
+| `owner_rules_v1.ts` | Owner rule matching for sync-time responsibility assignment |
 | `recurring_v1.ts` | V1 subscription detection algorithm |
 | `merchant.ts` | Merchant normalization and canonicalization |
 | `simplefin.ts` | SimpleFIN API client (`fetchAccounts`, `exchangeSetupToken`) |
+| `simplefin_backfill.ts` | Builds contiguous SimpleFIN backfill windows (exclusive end, <= 60 days) |
+| `simplefin_sync_options.ts` | Parses/validates sync body options (`force_archive_pending_days`, `lookback_days`, `backfill_months`) |
 | `crypto.ts` | Encrypt/decrypt SimpleFIN tokens (AES-GCM) |
 | `hash.ts` | SHA-256 hashing for transaction fingerprints |
 | `cors.ts` | CORS headers builder (uses `ALLOWED_ORIGINS` env) |
 | `env.ts` | Environment variable getters with validation |
 | `recurring.ts` | Older recurring detection (see `recurring_v1.ts`) |
 
-Tests exist for: `rules_v1`, `recurring_v1`, `merchant` (via Vitest).
+Tests exist for: `rules_v1`, `owner_rules_v1`, `recurring_v1`, `merchant`, `simplefin_sync_options`, `simplefin_backfill`, and web `categoryChart` helpers (via Vitest).
 
 ## Frontend Conventions
 
@@ -429,6 +437,11 @@ Run `analysis-daily` after inserting/updating rules so subscriptions are re-deri
 - Safe auto-reconcile archives stale pending rows only when a matching posted row is found.
 - One-time forced cleanup is available for operational recovery:
   - Send JSON body with `force_archive_pending_days` in cron mode.
+- Every sync now performs a bounded rolling refresh window to catch late-posting and pending->posted transitions:
+  - `lookback_days` default `60`, max `60`
+  - range uses explicit `start_date` + exclusive `end_date` (tomorrow)
+- Manual repair/backfill mode is available:
+  - Send JSON body with `backfill_months` (1..24) to force one-time historical backfill windows in manual sync mode.
 
 Example:
 
@@ -446,6 +459,35 @@ Invoke-RestMethod -Method POST -Uri "https://jefnjglsfxwalkslctns.supabase.co/fu
 3. Improve categorization coverage (most transactions start uncategorized; user builds rules over time)
 4. Keep recurring/review workflow simple and explainable
 
+## Next Chat Starter (UI Pass)
+
+As of March 12, 2026, a broad UI polish pass was completed on core pages and app shell:
+- New shared UI utility classes in `apps/web/src/index.css`: `page-hero`, `section-surface`, `field-control`, `btn-soft`
+- Header route descriptions added in `apps/web/src/App.tsx` nav metadata
+- Major page refreshes applied: Home, Login, Connect, Transactions, Cash Flow, Overview, Alerts, Auto Rules, Shift Log, Settings
+- Verification completed: `npm --workspace apps/web run lint` and `npm --workspace apps/web run build`
+
+### Immediate next implementation target
+
+Focus on **mobile ergonomics + task efficiency** for the heaviest workflows:
+
+1. Transactions mobile usability:
+   - Reduce filter density on small screens (group/toggle strategy)
+   - Improve table readability on narrow viewports (clear horizontal-scroll affordance or mobile row/card adaptation)
+   - Keep bulk actions obvious without occupying excessive vertical space
+2. Cash Flow + Auto Rules form usability:
+   - Improve small-screen form rhythm and field grouping
+   - Ensure primary actions remain obvious without constant scrolling
+3. QA pass:
+   - Validate at `360px`, `390px`, `768px`, and desktop widths
+   - Re-run `npm --workspace apps/web run lint` and `npm --workspace apps/web run build`
+
+### Constraints for next pass
+
+- Preserve product behavior and existing hooks/data flow; this pass is UX/layout-focused, not business-logic changes
+- Keep accessibility guardrails intact (focus states, labels, keyboard navigation)
+- Continue using existing visual language introduced in `index.css` utilities instead of adding one-off styles per page
+
 ## User Setup Assumptions
 
 - Two-person household: Brianna + Elaine (+ Household shared context)
@@ -453,5 +495,59 @@ Invoke-RestMethod -Method POST -Uri "https://jefnjglsfxwalkslctns.supabase.co/fu
 - Most spending is on credit cards
 - Paychecks land in checking accounts
 - Goal is a clean, obvious, and accurate workflow with minimal manual maintenance
+
+## Latest Session Handoff (March 13, 2026)
+
+### Completed this session
+
+- Finished the remediation plan started from the repo assessment:
+  - locked down `system-health` and `recurring` JWT settings
+  - aligned the dashboard health call with authenticated `GET`
+  - replaced hard-coded unit test file lists with Vitest discovery
+  - added CI quality gates for unit tests + web build before smoke e2e
+  - replaced placeholder README docs with repo-specific setup/runbook docs
+- Refactored major frontend maintainability hotspots:
+  - `apps/web/src/hooks/useTransactions.ts` reduced from ~1321 lines to ~376 via extracted modules
+  - `apps/web/src/hooks/useDashboard.ts` reduced from ~865 lines to ~190
+  - `apps/web/src/hooks/useSubscriptions.ts` reduced from ~1060 lines to ~252
+  - `apps/web/src/pages/Transactions.tsx` reduced to a composition page backed by extracted transaction components
+- Refactored backend sync hotspot:
+  - `supabase/functions/simplefin-sync/index.ts` reduced from ~1075 lines to ~451
+  - extracted `pending.ts`, `rules.ts`, `storage.ts`, `syncHelpers.ts`, and `types.ts`
+  - added focused unit tests for new simplefin-sync helper modules
+- Performed dashboard performance pass:
+  - route was already lazy-loaded, but dashboard lower sections are now viewport-deferred
+  - expensive dashboard panels are now split into lazy chunks
+  - health and supplemental RPC/function fetches are deferred until those sections are actually needed
+
+### Current verified state
+
+- `npm.cmd run lint --workspace web` passes
+- `npm.cmd run test:unit` passes (`34` tests)
+- `npm.cmd run build --workspace web` passes
+- No schema or migration changes were needed in this session
+
+### Important current bundle note
+
+- Dashboard route bundle was reduced substantially:
+  - old dashboard chunk was about `413.69 kB`
+  - current dashboard route chunk is about `38.41 kB`
+  - chart-heavy spend-by-category code now lives in its own chunk (`DashboardSpendByCategoryCard-*.js`, about `359.73 kB`)
+
+### Most useful next task
+
+If resuming from here, the best next optimization target is:
+
+1. Reduce the `DashboardSpendByCategoryCard` chart chunk size in `apps/web/src/components/dashboard/DashboardSpendByCategoryCard.tsx`
+
+Recommended options:
+- replace `recharts` with a lighter rendering approach
+- or keep `recharts` but load the chart only on explicit interaction instead of automatically
+
+### Resume context
+
+- Repo is in a healthy state after the remediation/refactor/performance passes
+- No known blocker is outstanding
+- Next work should be optimization or coverage, not urgent remediation
 
 

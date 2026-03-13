@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import { useRef } from 'react'
 import type { AccountOption, CategoryOption, CreateRuleFormState, TransactionRow } from '@/lib/types'
-import { parseAmount } from '@/hooks/useTransactions'
+import { parseAmount } from '@/hooks/useTransactions.helpers'
 import { useModalA11y } from '@/hooks/useModalA11y'
 
 type CreateRuleModalProps = {

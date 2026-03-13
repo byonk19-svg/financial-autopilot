@@ -49,14 +49,14 @@ export function DashboardSystemHealthCard({
   const latestError = systemHealth?.latest_error?.trim();
 
   return (
-    <Card aria-labelledby="system-health-heading" className="border border-[hsl(var(--primary)/0.28)] bg-[hsl(var(--primary)/0.06)] shadow-[0_18px_34px_-28px_hsl(var(--foreground)/0.5)] motion-fade-up motion-stagger-3">
+    <Card aria-labelledby="system-health-heading" className="border border-border/75 bg-card/95 shadow-[0_10px_24px_-22px_hsl(var(--foreground)/0.35)]">
       <section>
         <CardHeader className="pb-3 sm:pb-4">
           <CardTitle
             id="system-health-heading"
-            className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+            className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-muted-foreground"
           >
-            <ActivityIcon className="h-4 w-4 text-primary/80" />
+            <ActivityIcon className="h-4 w-4 text-primary/75" />
             System Health
           </CardTitle>
         </CardHeader>
@@ -97,7 +97,7 @@ export function DashboardSystemHealthCard({
               </dl>
 
               {latestError && (
-                <div className="rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.08)] p-3">
+                <div className="rounded-xl border border-[hsl(var(--destructive)/0.2)] bg-[hsl(var(--destructive)/0.05)] p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Latest Error
                   </p>
@@ -107,7 +107,7 @@ export function DashboardSystemHealthCard({
                 </div>
               )}
 
-              <div className="space-y-2 rounded-xl border border-[hsl(var(--primary)/0.26)] bg-[hsl(var(--primary)/0.08)] p-3">
+              <div className="space-y-2 rounded-xl border border-border/70 bg-muted/35 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <ActivityIcon className="h-3.5 w-3.5 text-primary/75" />
@@ -123,7 +123,7 @@ export function DashboardSystemHealthCard({
                     {systemHealth.jobs.map((job) => (
                       <div
                         key={job.job_name}
-                        className="space-y-1.5 rounded-lg border border-border bg-card px-2.5 py-2 transition-colors duration-150 hover:bg-background/80"
+                        className="space-y-1.5 rounded-lg border border-border/80 bg-card/90 px-2.5 py-2"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <p className="truncate text-sm font-medium text-foreground">
@@ -149,7 +149,7 @@ export function DashboardSystemHealthCard({
                           </p>
                         </div>
                         {job.last_error && (
-                          <p className="text-xs text-[hsl(var(--destructive))]">
+                          <p className="text-xs text-[hsl(var(--destructive)/0.9)]">
                             Error: {job.last_error}
                           </p>
                         )}
@@ -168,7 +168,7 @@ export function DashboardSystemHealthCard({
 
               {healthError && (
                 <div
-                  className="rounded-lg border border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.1)] px-3 py-2 text-sm text-[hsl(var(--destructive))]"
+                  className="rounded-lg border border-[hsl(var(--destructive)/0.24)] bg-[hsl(var(--destructive)/0.06)] px-3 py-2 text-sm text-[hsl(var(--destructive)/0.9)]"
                   role="alert"
                   aria-live="polite"
                 >

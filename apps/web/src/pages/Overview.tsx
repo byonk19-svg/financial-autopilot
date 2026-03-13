@@ -21,9 +21,9 @@ export default function Overview() {
     useOverview()
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-6">
       {/* Header */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <div className="page-hero">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Accounts</h1>
@@ -45,8 +45,8 @@ export default function Overview() {
 
         {!fetching && accounts.length > 0 && (
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {groups.map((group) => (
-              <div key={group.label} className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            {groups.slice(0, 2).map((group) => (
+              <div key={group.label} className="rounded-xl border border-border/70 bg-muted/25 px-4 py-3">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">{group.label}</p>
                 <p
                   className={`mt-1 text-xl font-semibold ${
@@ -57,7 +57,7 @@ export default function Overview() {
                 </p>
               </div>
             ))}
-            <div className="rounded-lg border border-border bg-primary/5 px-4 py-3">
+            <div className="rounded-xl border border-border/70 bg-primary/10 px-4 py-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Net worth</p>
               <p className={`mt-1 text-xl font-semibold ${netWorth < 0 ? 'text-rose-600' : 'text-foreground'}`}>
                 {toCurrency(netWorth)}
@@ -80,7 +80,7 @@ export default function Overview() {
 
       {/* Account groups */}
       {fetching ? (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="section-surface p-6">
           <div className="space-y-2.5">
             {Array.from({ length: 5 }).map((_, index) => (
               <div
@@ -97,14 +97,14 @@ export default function Overview() {
           </div>
         </div>
       ) : accounts.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="section-surface p-6">
           <div className="rounded-lg border border-dashed border bg-muted/30 px-4 py-6 text-center">
             <p className="text-sm text-muted-foreground">
               No accounts yet. Connect your bank to start syncing balances.
             </p>
             <Link
               to="/connect"
-              className="mt-3 inline-flex rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground transition-colors-fast hover:bg-muted"
+              className="btn-soft mt-3 inline-flex rounded-md px-3 py-1.5 font-semibold text-foreground"
             >
               Go to Connect
             </Link>
@@ -112,7 +112,7 @@ export default function Overview() {
         </div>
       ) : (
         groups.map((group) => (
-          <div key={group.label} className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div key={group.label} className="section-surface p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-foreground">{group.label}</h2>
               <span

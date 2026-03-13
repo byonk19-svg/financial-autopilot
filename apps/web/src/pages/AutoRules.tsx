@@ -47,7 +47,7 @@ function CategoryAutoRuleForm({
   const showAmountRange = form.ruleType === 'merchant_contains_amount_range'
 
   return (
-    <form onSubmit={onSubmit} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+    <form onSubmit={onSubmit} className="section-surface p-5">
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{ruleTypeDescription(form.ruleType)}</p>
 
@@ -65,7 +65,7 @@ function CategoryAutoRuleForm({
                 maxAmount: '',
               }))
             }
-            className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+            className="field-control"
           >
             <option value="merchant_contains">Merchant contains</option>
             <option value="merchant_exact">Merchant exact</option>
@@ -80,7 +80,7 @@ function CategoryAutoRuleForm({
             type="text"
             value={form.merchantPattern}
             onChange={(event) => onSetForm((current) => ({ ...current, merchantPattern: event.target.value }))}
-            className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+            className="field-control"
             placeholder="NETFLIX"
           />
         </label>
@@ -90,7 +90,7 @@ function CategoryAutoRuleForm({
           <select
             value={form.categoryId}
             onChange={(event) => onSetForm((current) => ({ ...current, categoryId: event.target.value }))}
-            className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+            className="field-control"
           >
             <option value="">Select category</option>
             {categories.map((category) => (
@@ -107,7 +107,7 @@ function CategoryAutoRuleForm({
             <select
               value={form.accountId}
               onChange={(event) => onSetForm((current) => ({ ...current, accountId: event.target.value }))}
-              className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+              className="field-control"
             >
               <option value="">Select account</option>
               {accounts.map((account) => (
@@ -128,7 +128,7 @@ function CategoryAutoRuleForm({
               min="0"
               value={form.minAmount}
               onChange={(event) => onSetForm((current) => ({ ...current, minAmount: event.target.value }))}
-              className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+              className="field-control"
               placeholder="0.00"
             />
           </label>
@@ -143,7 +143,7 @@ function CategoryAutoRuleForm({
               min="0"
               value={form.maxAmount}
               onChange={(event) => onSetForm((current) => ({ ...current, maxAmount: event.target.value }))}
-              className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+              className="field-control"
               placeholder="100.00"
             />
           </label>
@@ -193,7 +193,7 @@ function OwnerAutoRuleForm({
   const showAmountRange = form.ruleType === 'merchant_contains_amount_range'
 
   return (
-    <form onSubmit={onSubmit} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+    <form onSubmit={onSubmit} className="section-surface p-5">
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{ruleTypeDescription(form.ruleType)}</p>
 
@@ -211,7 +211,7 @@ function OwnerAutoRuleForm({
                 maxAmount: '',
               }))
             }
-            className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+            className="field-control"
           >
             <option value="merchant_contains">Merchant contains</option>
             <option value="merchant_exact">Merchant exact</option>
@@ -226,7 +226,7 @@ function OwnerAutoRuleForm({
             type="text"
             value={form.merchantPattern}
             onChange={(event) => onSetForm((current) => ({ ...current, merchantPattern: event.target.value }))}
-            className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+            className="field-control"
             placeholder="SPOTIFY"
           />
         </label>
@@ -241,7 +241,7 @@ function OwnerAutoRuleForm({
                 setOwner: event.target.value as OwnerAutoRuleFormState['setOwner'],
               }))
             }
-            className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+            className="field-control"
           >
             <option value="">Select owner</option>
             <option value="brianna">Brianna</option>
@@ -256,7 +256,7 @@ function OwnerAutoRuleForm({
             <select
               value={form.accountId}
               onChange={(event) => onSetForm((current) => ({ ...current, accountId: event.target.value }))}
-              className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+              className="field-control"
             >
               <option value="">Select account</option>
               {accounts.map((account) => (
@@ -277,7 +277,7 @@ function OwnerAutoRuleForm({
               min="0"
               value={form.minAmount}
               onChange={(event) => onSetForm((current) => ({ ...current, minAmount: event.target.value }))}
-              className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+              className="field-control"
               placeholder="0.00"
             />
           </label>
@@ -292,7 +292,7 @@ function OwnerAutoRuleForm({
               min="0"
               value={form.maxAmount}
               onChange={(event) => onSetForm((current) => ({ ...current, maxAmount: event.target.value }))}
-              className="rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none ring-ring focus:border-primary focus:ring-2"
+              className="field-control"
               placeholder="100.00"
             />
           </label>
@@ -372,7 +372,7 @@ export default function AutoRules() {
 
   return (
     <section className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <div className="page-hero">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Auto Rules</h1>
@@ -390,7 +390,7 @@ export default function AutoRules() {
             onClick={() => {
               void importFromManualRules()
             }}
-            className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn-soft disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Importing...' : 'Import Category Rules From Manual Rules'}
           </button>
@@ -425,7 +425,7 @@ export default function AutoRules() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="section-surface p-5">
           <h2 className="text-lg font-semibold text-foreground">Saved Category Auto Rules</h2>
           {fetching ? (
             <p className="mt-3 text-sm text-muted-foreground">Loading rules...</p>
@@ -456,7 +456,7 @@ export default function AutoRules() {
                           type="button"
                           onClick={cancelEdit}
                           disabled={submitting}
-                          className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                          className="btn-soft disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Cancel
                         </button>
@@ -500,7 +500,7 @@ export default function AutoRules() {
                         type="button"
                         onClick={() => startEdit(rule)}
                         disabled={submitting}
-                        className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                        className="btn-soft disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Edit
                       </button>
@@ -508,7 +508,7 @@ export default function AutoRules() {
                         type="button"
                         onClick={() => void toggleActive(rule)}
                         disabled={submitting}
-                        className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                        className="btn-soft disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {rule.is_active ? 'Deactivate' : 'Activate'}
                       </button>
@@ -528,7 +528,7 @@ export default function AutoRules() {
           )}
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <div className="section-surface p-5">
           <h2 className="text-lg font-semibold text-foreground">Saved Owner Auto Rules</h2>
           {fetching ? (
             <p className="mt-3 text-sm text-muted-foreground">Loading rules...</p>
@@ -558,7 +558,7 @@ export default function AutoRules() {
                           type="button"
                           onClick={cancelOwnerEdit}
                           disabled={submitting}
-                          className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                          className="btn-soft disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Cancel
                         </button>
@@ -602,7 +602,7 @@ export default function AutoRules() {
                         type="button"
                         onClick={() => startOwnerEdit(rule)}
                         disabled={submitting}
-                        className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                        className="btn-soft disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Edit
                       </button>
@@ -610,7 +610,7 @@ export default function AutoRules() {
                         type="button"
                         onClick={() => void toggleOwnerRuleActive(rule)}
                         disabled={submitting}
-                        className="rounded-lg border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+                        className="btn-soft disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {rule.is_active ? 'Deactivate' : 'Activate'}
                       </button>
