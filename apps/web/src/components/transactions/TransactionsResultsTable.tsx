@@ -19,6 +19,7 @@ import {
   UNCATEGORIZED_VALUE,
 } from '@/hooks/useTransactions.helpers'
 import type {
+  AccountOption,
   CategoryOption,
   SortColumn,
   SortDirection,
@@ -30,6 +31,7 @@ import type {
 type SplitLineUpdates = Partial<Pick<TransactionSplitDraftLine, 'category_id' | 'amount_input' | 'memo'>>
 
 type TransactionsResultsTableProps = {
+  accountById: Map<string, AccountOption>
   accountNameById: Map<string, string>
   allVisibleSelected: boolean
   applyBulkCategoryUpdate: (categoryId: string) => Promise<void>
@@ -78,6 +80,7 @@ const SORTABLE_COLUMNS: Array<{ key: SortColumn; label: string }> = [
 ]
 
 export function TransactionsResultsTable({
+  accountById,
   accountNameById,
   allVisibleSelected,
   applyBulkCategoryUpdate,
@@ -182,6 +185,7 @@ export function TransactionsResultsTable({
                 <tbody className="divide-y divide-border">
                   {transactions.map((transaction) => (
                     <TransactionRowGroup
+                      accountById={accountById}
                       key={transaction.id}
                       accountNameById={accountNameById}
                       bulkUpdating={bulkUpdating}
@@ -346,6 +350,7 @@ function ResultsEmptyState() {
 }
 
 type TransactionRowGroupProps = {
+  accountById: Map<string, AccountOption>
   accountNameById: Map<string, string>
   bulkUpdating: boolean
   categories: CategoryOption[]
@@ -371,6 +376,7 @@ type TransactionRowGroupProps = {
 }
 
 function TransactionRowGroup({
+  accountById,
   accountNameById,
   bulkUpdating,
   categories,
@@ -401,10 +407,17 @@ function TransactionRowGroup({
   const isCategoryUpdating = categoryUpdatingIds.has(transaction.id)
   const isExpanded = expandedTransactionIds.has(transaction.id)
   const matchedRuleId = resolveRuleId(transaction)
+  const account = accountById.get(transaction.account_id)
   const accountName = accountNameById.get(transaction.account_id) ?? 'Unknown account'
+  const accountType = account?.type?.trim() || 'Not available'
+  const creditAccountLabel =
+    typeof account?.is_credit === 'boolean' ? (account.is_credit ? 'Yes' : 'No') : 'Unknown'
   const rawMerchant = transaction.merchant_normalized ?? 'Not available'
   const rawDescription = transaction.description_full ?? transaction.description_short ?? 'Not available'
   const categorySource = transaction.category_source ?? null
+  const transactionType = transaction.type ?? 'Not available'
+  const pendingLabel =
+    typeof transaction.is_pending === 'boolean' ? (transaction.is_pending ? 'Pending' : 'Posted') : 'Unknown'
   const splitRows = splitRowsByTransactionId[transaction.id] ?? []
   const splitCount = splitRows.length
   const hasSplits = splitCount > 0
@@ -525,6 +538,14 @@ function TransactionRowGroup({
                   <p className="mt-1 break-words text-foreground">{accountName}</p>
                 </div>
                 <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Account type</p>
+                  <p className="mt-1 text-foreground">{accountType}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit account</p>
+                  <p className="mt-1 text-foreground">{creditAccountLabel}</p>
+                </div>
+                <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Amount</p>
                   <p className={`mt-1 ${amount < 0 ? 'font-medium text-emerald-600' : 'text-foreground'}`}>
                     {amount.toLocaleString(undefined, { style: 'currency', currency: transaction.currency || 'USD' })}
@@ -537,6 +558,14 @@ function TransactionRowGroup({
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Category source</p>
                   <p className="mt-1 text-foreground">{categorySource ?? 'Not available'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Transaction type</p>
+                  <p className="mt-1 text-foreground">{transactionType}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</p>
+                  <p className="mt-1 text-foreground">{pendingLabel}</p>
                 </div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Category</p>

@@ -1,6 +1,8 @@
 export type AccountOption = {
   id: string
   name: string
+  type?: string | null
+  is_credit?: boolean
 }
 
 export type CategoryOption = {

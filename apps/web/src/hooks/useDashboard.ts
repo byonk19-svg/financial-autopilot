@@ -22,6 +22,11 @@ import type {
 } from '@/hooks/useDashboard.shared'
 import { useDashboardSupplemental } from '@/hooks/useDashboard.supplemental'
 import { useDashboardSync } from '@/hooks/useDashboard.sync'
+import type {
+  DashboardMonthlyTrendRow,
+  DashboardRecentTransaction,
+  DashboardTopSpendCategory,
+} from '@/lib/dashboardFinance'
 
 export type {
   DashboardAnomalyRow,
@@ -29,8 +34,11 @@ export type {
   DashboardAutopilotMetrics,
   DashboardDataFreshnessRow,
   DashboardKpis,
+  DashboardMonthlyTrendRow,
   DashboardOwnerResponsibility,
   DashboardOwnerResponsibilityRow,
+  DashboardRecentTransaction,
+  DashboardTopSpendCategory,
   DashboardRenewalRow,
   SystemHealthPayload,
 }
@@ -51,6 +59,8 @@ export function useDashboard(userId: string | undefined, options: UseDashboardOp
     anomalies,
     attentionCounts,
     autopilotMetrics,
+    creditSpendMtd,
+    creditTopCategories,
     dataFreshnessRows,
     error: dataError,
     kpis,
@@ -58,7 +68,9 @@ export function useDashboard(userId: string | undefined, options: UseDashboardOp
     lastAnalysisAt,
     lastWeeklyInsightsAt,
     loadDashboardData,
+    monthlyTrend,
     ownerResponsibility,
+    recentTransactions,
     upcomingRenewals,
   } = normalizeDashboardDataHook(useDashboardData(userId))
 
@@ -146,6 +158,8 @@ export function useDashboard(userId: string | undefined, options: UseDashboardOp
     needsConnection,
     attentionCounts,
     autopilotMetrics,
+    creditSpendMtd,
+    creditTopCategories,
     ownerResponsibility,
     kpis,
     upcomingRenewals,
@@ -155,6 +169,8 @@ export function useDashboard(userId: string | undefined, options: UseDashboardOp
     lastAnalysisAt,
     lastWeeklyInsightsAt,
     dataFreshnessRows,
+    monthlyTrend,
+    recentTransactions,
     systemHealth,
     healthLoading,
     healthError,
@@ -176,6 +192,8 @@ function normalizeDashboardDataHook(data: ReturnType<typeof useDashboardData>): 
   anomalies: DashboardAnomalyRow[]
   attentionCounts: DashboardAttentionCounts
   autopilotMetrics: DashboardAutopilotMetrics
+  creditSpendMtd: number
+  creditTopCategories: DashboardTopSpendCategory[]
   dataFreshnessRows: DashboardDataFreshnessRow[]
   error: string
   kpis: DashboardKpis
@@ -183,13 +201,17 @@ function normalizeDashboardDataHook(data: ReturnType<typeof useDashboardData>): 
   lastAnalysisAt: string | null
   lastWeeklyInsightsAt: string | null
   loadDashboardData: () => Promise<void>
+  monthlyTrend: DashboardMonthlyTrendRow[]
   ownerResponsibility: DashboardOwnerResponsibility
+  recentTransactions: DashboardRecentTransaction[]
   upcomingRenewals: DashboardRenewalRow[]
 } {
   return {
     anomalies: data.anomalies,
     attentionCounts: data.attentionCounts,
     autopilotMetrics: data.autopilotMetrics,
+    creditSpendMtd: data.creditSpendMtd,
+    creditTopCategories: data.creditTopCategories,
     dataFreshnessRows: data.dataFreshnessRows,
     error: data.errorMessage,
     kpis: data.kpis,
@@ -197,7 +219,9 @@ function normalizeDashboardDataHook(data: ReturnType<typeof useDashboardData>): 
     lastAnalysisAt: data.lastAnalysisAt,
     lastWeeklyInsightsAt: data.lastWeeklyInsightsAt,
     loadDashboardData: data.loadDashboardData,
+    monthlyTrend: data.monthlyTrend,
     ownerResponsibility: data.ownerResponsibility,
+    recentTransactions: data.recentTransactions,
     upcomingRenewals: data.upcomingRenewals,
   }
 }

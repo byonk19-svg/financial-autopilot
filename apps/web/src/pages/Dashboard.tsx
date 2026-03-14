@@ -5,13 +5,18 @@ import { DashboardAutopilotMetricsCard } from '@/components/dashboard/DashboardA
 import { DashboardDeferredSection } from '@/components/dashboard/DashboardDeferredSection'
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader'
 import { DashboardLoading } from '@/components/dashboard/DashboardLoading'
+import { DashboardMonthlyTrendCard } from '@/components/dashboard/DashboardMonthlyTrendCard'
 import { DashboardOwnerResponsibilityCard } from '@/components/dashboard/DashboardOwnerResponsibilityCard'
+import { DashboardRecentTransactionsCard } from '@/components/dashboard/DashboardRecentTransactionsCard'
 import { DashboardStatsGrid } from '@/components/dashboard/DashboardStatsGrid'
+import { Button } from '@/components/ui/button'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useSession } from '@/lib/session'
 
+const loadDashboardSpendByCategoryCard = () => import('@/components/dashboard/DashboardSpendByCategoryCard')
+
 const DashboardSpendByCategoryCard = lazy(async () => {
-  const module = await import('@/components/dashboard/DashboardSpendByCategoryCard')
+  const module = await loadDashboardSpendByCategoryCard()
   return { default: module.DashboardSpendByCategoryCard }
 })
 
@@ -54,11 +59,15 @@ export default function Dashboard() {
     needsConnection,
     attentionCounts,
     autopilotMetrics,
+    creditSpendMtd,
+    creditTopCategories,
     ownerResponsibility,
     kpis,
     anomalies,
     upcomingRenewals,
     renewalMonthlyTotal,
+    monthlyTrend,
+    recentTransactions,
     lastAccountSyncAt,
     dataFreshnessRows,
     lastAnalysisAt,
@@ -105,6 +114,15 @@ export default function Dashboard() {
     navigate('/connect')
   }, [navigate])
 
+  const preloadSpendSection = useCallback(() => {
+    void loadDashboardSpendByCategoryCard()
+  }, [])
+
+  const handleLoadSpendSection = useCallback(() => {
+    preloadSpendSection()
+    setShowSpendSection(true)
+  }, [preloadSpendSection])
+
   if (loading || checkingConnection || !session?.user || needsConnection) {
     return <DashboardLoading />
   }
@@ -138,14 +156,25 @@ export default function Dashboard() {
         renewalMonthlyTotal={renewalMonthlyTotal}
       />
 
-      <DashboardDeferredSection
-        fallback={<DashboardCardFallback minHeightClassName="min-h-[24rem]" />}
-        onVisible={() => setShowSpendSection(true)}
-      >
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]" aria-label="Dashboard trends and recent activity">
+        <DashboardMonthlyTrendCard rows={monthlyTrend} />
+        <DashboardRecentTransactionsCard recentTransactions={recentTransactions} />
+      </section>
+
+      <section aria-labelledby="dashboard-spend-heading">
         <Suspense fallback={<DashboardCardFallback minHeightClassName="min-h-[24rem]" />}>
-          {showSpendSection ? <DashboardSpendByCategoryCard /> : null}
+          {showSpendSection ? (
+            <DashboardSpendByCategoryCard />
+          ) : (
+            <DashboardSpendPreviewCard
+              topCategories={creditTopCategories}
+              spendMtd={creditSpendMtd}
+              onLoad={handleLoadSpendSection}
+              onPrefetch={preloadSpendSection}
+            />
+          )}
         </Suspense>
-      </DashboardDeferredSection>
+      </section>
 
       <DashboardDeferredSection
         className="grid gap-5 md:grid-cols-2 xl:gap-6"
@@ -250,4 +279,85 @@ function DashboardLowerContentFallback() {
       <DashboardSidebarFallback />
     </>
   )
+}
+
+function DashboardSpendPreviewCard({
+  topCategories,
+  spendMtd,
+  onLoad,
+  onPrefetch,
+}: {
+  topCategories: Array<{ category: string; amount: number }>
+  spendMtd: number
+  onLoad: () => void
+  onPrefetch: () => void
+}) {
+  const maxAmount = topCategories.reduce((max, row) => Math.max(max, row.amount), 0)
+
+  return (
+    <div className="rounded-3xl border border-border/75 bg-card/95 p-6 shadow-[0_10px_24px_-22px_hsl(var(--foreground)/0.35)]">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-2xl space-y-4">
+          <div>
+            <h2 id="dashboard-spend-heading" className="text-base font-semibold text-foreground">
+              Spend by Category
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Credit card purchase spend only (expenses).
+            </p>
+          </div>
+          {topCategories.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Top category drivers for this month so far. Open the full chart when you want a deeper breakdown.
+              </p>
+              <div className="space-y-3">
+                {topCategories.slice(0, 5).map((row) => (
+                  <div key={row.category} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <p className="truncate font-medium text-foreground">{row.category}</p>
+                      <p className="shrink-0 text-muted-foreground">{formatCurrency(row.amount)}</p>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-muted/55">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${maxAmount > 0 ? (row.amount / maxAmount) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No credit-card category spend has been recorded for this month yet.
+            </p>
+          )}
+        </div>
+        <div className="w-full max-w-xs space-y-3">
+          <div className="rounded-2xl border border-border/75 bg-muted/20 px-4 py-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Credit spend MTD</p>
+            <p className="mt-2 text-2xl font-semibold text-foreground">{formatCurrency(spendMtd)}</p>
+          </div>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={onLoad}
+            onMouseEnter={onPrefetch}
+            onFocus={onPrefetch}
+          >
+            View interactive chart
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function formatCurrency(value: number): string {
+  return value.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+  })
 }

@@ -1,5 +1,10 @@
 import { toNumber } from '@/lib/subscriptionFormatters'
 import type { SavingsBucketSummaryRpc, ShiftWeekSummaryRpc } from '@/lib/types'
+import type {
+  DashboardMonthlyTrendRow,
+  DashboardRecentTransaction,
+  DashboardTopSpendCategory,
+} from '@/lib/dashboardFinance'
 
 export type DashboardKpisRpc = {
   income_mtd: number | string | null
@@ -146,13 +151,17 @@ export type DashboardCoreSnapshot = {
   anomalies: DashboardAnomalyRow[]
   attentionCounts: DashboardAttentionCounts
   autopilotMetrics: DashboardAutopilotMetrics
+  creditSpendMtd: number
+  creditTopCategories: DashboardTopSpendCategory[]
   dataFreshnessRows: DashboardDataFreshnessRow[]
   errorMessage: string
   kpis: DashboardKpis
   lastAccountSyncAt: string | null
   lastAnalysisAt: string | null
   lastWeeklyInsightsAt: string | null
+  monthlyTrend: DashboardMonthlyTrendRow[]
   ownerResponsibility: DashboardOwnerResponsibility
+  recentTransactions: DashboardRecentTransaction[]
   upcomingRenewals: DashboardRenewalRow[]
 }
 

@@ -34,6 +34,7 @@ export default function Transactions() {
     setShowHidden,
     search,
     accountNameById,
+    accountById,
     categoryNameById,
     activeFilterChips,
     hasActiveFilters,
@@ -136,6 +137,7 @@ export default function Transactions() {
       />
 
       <TransactionsResultsTable
+        accountById={accountById}
         accountNameById={accountNameById}
         allVisibleSelected={allVisibleSelected}
         applyBulkCategoryUpdate={applyBulkCategoryUpdate}

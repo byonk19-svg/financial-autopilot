@@ -496,58 +496,98 @@ Focus on **mobile ergonomics + task efficiency** for the heaviest workflows:
 - Paychecks land in checking accounts
 - Goal is a clean, obvious, and accurate workflow with minimal manual maintenance
 
-## Latest Session Handoff (March 13, 2026)
+## Latest Session Handoff (March 14, 2026)
 
-### Completed this session
+### Completed recently
 
-- Finished the remediation plan started from the repo assessment:
-  - locked down `system-health` and `recurring` JWT settings
-  - aligned the dashboard health call with authenticated `GET`
-  - replaced hard-coded unit test file lists with Vitest discovery
-  - added CI quality gates for unit tests + web build before smoke e2e
-  - replaced placeholder README docs with repo-specific setup/runbook docs
-- Refactored major frontend maintainability hotspots:
-  - `apps/web/src/hooks/useTransactions.ts` reduced from ~1321 lines to ~376 via extracted modules
-  - `apps/web/src/hooks/useDashboard.ts` reduced from ~865 lines to ~190
-  - `apps/web/src/hooks/useSubscriptions.ts` reduced from ~1060 lines to ~252
-  - `apps/web/src/pages/Transactions.tsx` reduced to a composition page backed by extracted transaction components
-- Refactored backend sync hotspot:
-  - `supabase/functions/simplefin-sync/index.ts` reduced from ~1075 lines to ~451
-  - extracted `pending.ts`, `rules.ts`, `storage.ts`, `syncHelpers.ts`, and `types.ts`
-  - added focused unit tests for new simplefin-sync helper modules
-- Performed dashboard performance pass:
-  - route was already lazy-loaded, but dashboard lower sections are now viewport-deferred
-  - expensive dashboard panels are now split into lazy chunks
-  - health and supplemental RPC/function fetches are deferred until those sections are actually needed
+- Fixed credit-card classification drift that was breaking dashboard category spend:
+  - added `0058_account_credit_metadata_heuristics.sql`
+  - pushed it to the linked Supabase project
+  - exposed transaction debug fields in the Transactions details panel (`account type`, `credit account`, `transaction type`, `status`) so classification issues can be diagnosed from the UI
+- Reworked `CashFlow.tsx` into a decision-first page:
+  - top verdict (`Safe / Tight / At Risk`)
+  - 14-day runway view
+  - watchpoints and quick numbers
+  - planner sections pushed below the decision surface
+  - detailed ledger retained as supporting evidence
+- Improved dashboard usefulness with safe, incremental additions:
+  - added monthly income-vs-expense trend card
+  - added recent activity card
+  - made the default Spend by Category preview useful before loading the heavy interactive chart
+  - kept the interactive chart lazy/on-demand
+- Fixed dashboard consistency around hidden transactions:
+  - added `0059_dashboard_hidden_transaction_consistency.sql`
+  - updated `dashboard_kpis`, `anomalies`, and `spend_by_category` to exclude hidden transactions
+  - pushed `0059` to the linked Supabase project
+- Added regression protection:
+  - new unit-tested finance helper module: `apps/web/src/lib/dashboardFinance.ts`
+  - authenticated Playwright regression now verifies the dashboard trend/activity sections and confirms dashboard transaction fetches exclude hidden rows
+- Installed Obra Superpowers skills at user level:
+  - repo cloned to `C:\Users\byonk\.codex\superpowers`
+  - junction created at `C:\Users\byonk\.agents\skills\superpowers -> C:\Users\byonk\.codex\superpowers\skills`
+  - Codex restart is required to discover them
 
 ### Current verified state
 
+- `npm.cmd run test:unit` passes (`37` tests)
 - `npm.cmd run lint --workspace web` passes
-- `npm.cmd run test:unit` passes (`34` tests)
 - `npm.cmd run build --workspace web` passes
-- No schema or migration changes were needed in this session
+- `npm.cmd run test:e2e -- tests/e2e/authenticated-flow.spec.ts` passes (`7` tests)
+- `npx.cmd supabase db push --linked --yes` has been run for:
+  - `0058_account_credit_metadata_heuristics.sql`
+  - `0059_dashboard_hidden_transaction_consistency.sql`
+
+### Important current product state
+
+- Spending is still intentionally split from cash flow:
+  - dashboard/category spend = credit-card purchase spend
+  - cash flow = checking account inflows/outflows
+- The dashboard now has:
+  - KPI cards
+  - monthly trend view
+  - recent activity view
+  - lazy/on-demand spend-by-category chart
+  - deferred lower sections for health/supplemental content
+- Cash Flow is now in a much better UX state, but it still likely needs a mobile-tightening pass rather than another structural rewrite
 
 ### Important current bundle note
 
-- Dashboard route bundle was reduced substantially:
-  - old dashboard chunk was about `413.69 kB`
-  - current dashboard route chunk is about `38.41 kB`
-  - chart-heavy spend-by-category code now lives in its own chunk (`DashboardSpendByCategoryCard-*.js`, about `359.73 kB`)
+- Dashboard route bundle is still relatively lean
+- The heaviest remaining dashboard asset is still the interactive spend chart chunk:
+  - `DashboardSpendByCategoryCard-*.js` is still about `359-360 kB`
+- This is the clearest remaining frontend performance hotspot
 
-### Most useful next task
+### Current local worktree note
 
-If resuming from here, the best next optimization target is:
+There are intentional local changes in progress / not yet committed in these areas:
+- `apps/web/src/pages/CashFlow.tsx`
+- `apps/web/src/pages/Dashboard.tsx`
+- `apps/web/src/hooks/useDashboard*.ts`
+- `apps/web/src/lib/dashboardFinance.ts`
+- `apps/web/src/components/dashboard/*`
+- transaction debug-field changes from the credit-classification investigation
+- migrations `0058` and `0059`
 
-1. Reduce the `DashboardSpendByCategoryCard` chart chunk size in `apps/web/src/components/dashboard/DashboardSpendByCategoryCard.tsx`
+Do not revert those casually. They reflect the current working state and have already been verified locally.
 
-Recommended options:
-- replace `recharts` with a lighter rendering approach
-- or keep `recharts` but load the chart only on explicit interaction instead of automatically
+### Best next task
+
+If resuming in a new chat, the best next task is:
+
+1. Replace or simplify the heavy `DashboardSpendByCategoryCard` implementation in `apps/web/src/components/dashboard/DashboardSpendByCategoryCard.tsx`
+
+Preferred direction:
+- keep the current on-demand loading behavior
+- replace `recharts` with a lighter custom SVG/CSS implementation if possible
+- preserve the same business semantics: credit-card `expense` spend only, hidden/pending/deleted excluded
 
 ### Resume context
 
-- Repo is in a healthy state after the remediation/refactor/performance passes
-- No known blocker is outstanding
-- Next work should be optimization or coverage, not urgent remediation
+- Repo is in a solid state with passing unit tests, lint, build, and authenticated Playwright coverage
+- No urgent data-integrity blocker is open right now
+- The next work should be:
+  - dashboard chart weight reduction
+  - cash-flow mobile ergonomics
+  - more dashboard/authenticated regression coverage
 
 

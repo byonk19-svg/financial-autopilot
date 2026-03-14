@@ -54,7 +54,11 @@ export async function loadTransactionFilterOptions(userId: string): Promise<{
   categories: CategoryOption[]
 }> {
   const [accountsResult, categoriesResult] = await Promise.all([
-    supabase.from('accounts').select('id, name').eq('user_id', userId).order('name', { ascending: true }),
+    supabase
+      .from('accounts')
+      .select('id, name, type, is_credit')
+      .eq('user_id', userId)
+      .order('name', { ascending: true }),
     supabase.from('categories').select('id, name').eq('user_id', userId).order('name', { ascending: true }),
   ])
 

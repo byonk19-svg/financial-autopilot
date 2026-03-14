@@ -75,6 +75,12 @@ export function useTransactions() {
     return map
   }, [accounts])
 
+  const accountById = useMemo(() => {
+    const map = new Map<string, AccountOption>()
+    for (const account of accounts) map.set(account.id, account)
+    return map
+  }, [accounts])
+
   const categoryNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const category of categories) map.set(category.id, category.name)
@@ -312,6 +318,7 @@ export function useTransactions() {
     showHidden,
     setShowHidden,
     search,
+    accountById,
     accountNameById,
     categoryNameById,
     activeFilterChips,

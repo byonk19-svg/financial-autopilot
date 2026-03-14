@@ -78,6 +78,44 @@ test.describe('authenticated sync -> analysis -> recurring flow', () => {
     ])
   })
 
+  test('dashboard shows trend and recent activity and excludes hidden transactions in dashboard transaction fetches', async ({ page }) => {
+    await ensureSignedIn(page)
+
+    await page.route('**/rest/v1/bank_connections*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 'mock-simplefin-connection' }]),
+      })
+    })
+
+    const dashboardTransactionsRequest = page.waitForRequest(
+      (request) => {
+        if (request.method() !== 'GET' || !request.url().includes('/rest/v1/transactions')) {
+          return false
+        }
+
+        const decodedUrl = decodeURIComponent(request.url())
+        return (
+          decodedUrl.includes(
+            'select=id,posted_at,amount,type,category,description_short,merchant_canonical,merchant_normalized,is_credit',
+          ) &&
+          decodedUrl.includes('type=in.(income,expense)') &&
+          decodedUrl.includes('is_hidden=eq.false')
+        )
+      },
+      { timeout: 20_000 },
+    )
+
+    await page.goto('/')
+    await dashboardTransactionsRequest
+
+    await expect(page.getByText('Monthly Flow Trend')).toBeVisible()
+    await expect(page.getByText('Recent Activity')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Spend by Category' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'View interactive chart' })).toBeVisible()
+  })
+
   test('split recurring merchants render as separate rows', async ({ page }) => {
     await ensureSignedIn(page)
 

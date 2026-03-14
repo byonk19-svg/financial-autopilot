@@ -1,4 +1,11 @@
 import { useCallback, useState } from 'react'
+import {
+  buildDashboardCreditSpendSummary,
+  buildDashboardMonthlyTrendRows,
+  buildDashboardRecentTransactions,
+  type DashboardRecentTransactionSourceRow,
+  type DashboardTrendSourceRow,
+} from '@/lib/dashboardFinance'
 import { captureException } from '@/lib/errorReporting'
 import { toNumber } from '@/lib/subscriptionFormatters'
 import { supabase } from '@/lib/supabase'
@@ -34,18 +41,27 @@ function initialCoreSnapshot(): DashboardCoreSnapshot {
     anomalies: [],
     attentionCounts: emptyAttentionCounts(),
     autopilotMetrics: emptyAutopilotMetrics(),
+    creditSpendMtd: 0,
+    creditTopCategories: [],
     dataFreshnessRows: [],
     errorMessage: '',
     kpis: normalizeKpis(null),
     lastAccountSyncAt: null,
     lastAnalysisAt: null,
     lastWeeklyInsightsAt: null,
+    monthlyTrend: [],
     ownerResponsibility: emptyOwnerResponsibility(),
+    recentTransactions: [],
     upcomingRenewals: [],
   }
 }
 
 async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnapshot> {
+  const trendWindowStart = new Date()
+  trendWindowStart.setUTCDate(1)
+  trendWindowStart.setUTCMonth(trendWindowStart.getUTCMonth() - 5)
+  const trendWindowStartIso = trendWindowStart.toISOString()
+
   const [
     kpisResult,
     renewalsResult,
@@ -63,6 +79,7 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
     uncategorizedLast7dResult,
     manualFixesLast7dResult,
     ownerTransactionsMtdResult,
+    dashboardTransactionsResult,
   ] = await Promise.allSettled([
     supabase.rpc('dashboard_kpis', {
       start_date: monthStartDate(),
@@ -100,8 +117,12 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
     supabase
       .from('transactions')
       .select('*', { count: 'exact', head: true })
+      .eq('is_deleted', false)
+      .eq('is_pending', false)
+      .eq('is_hidden', false)
       .eq('is_credit', true)
       .is('category_id', null)
+      .is('user_category_id', null)
       .neq('type', 'transfer'),
     supabase
       .from('subscriptions')
@@ -118,12 +139,18 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
     supabase
       .from('transactions')
       .select('*', { count: 'exact', head: true })
+      .eq('is_deleted', false)
+      .eq('is_pending', false)
+      .eq('is_hidden', false)
       .eq('is_credit', true)
       .neq('type', 'transfer')
       .gte('posted_at', daysAgoIso(30)),
     supabase
       .from('transactions')
       .select('*', { count: 'exact', head: true })
+      .eq('is_deleted', false)
+      .eq('is_pending', false)
+      .eq('is_hidden', false)
       .eq('is_credit', true)
       .neq('type', 'transfer')
       .eq('category_source', 'rule')
@@ -131,6 +158,9 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
     supabase
       .from('transactions')
       .select('*', { count: 'exact', head: true })
+      .eq('is_deleted', false)
+      .eq('is_pending', false)
+      .eq('is_hidden', false)
       .eq('is_credit', true)
       .neq('type', 'transfer')
       .is('category_id', null)
@@ -139,6 +169,9 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
     supabase
       .from('transactions')
       .select('*', { count: 'exact', head: true })
+      .eq('is_deleted', false)
+      .eq('is_pending', false)
+      .eq('is_hidden', false)
       .eq('is_credit', true)
       .neq('type', 'transfer')
       .eq('category_source', 'user')
@@ -148,9 +181,23 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
       .select('owner, type, amount')
       .eq('is_deleted', false)
       .eq('is_pending', false)
+      .eq('is_hidden', false)
       .in('type', ['income', 'expense'])
       .gte('posted_at', `${monthStartDate()}T00:00:00Z`)
       .lt('posted_at', `${tomorrowDate()}T00:00:00Z`),
+    supabase
+      .from('transactions')
+      .select(
+        'id, posted_at, amount, type, category, description_short, merchant_canonical, merchant_normalized, is_credit',
+      )
+      .eq('user_id', userId)
+      .eq('is_deleted', false)
+      .eq('is_pending', false)
+      .eq('is_hidden', false)
+      .in('type', ['income', 'expense'])
+      .gte('posted_at', trendWindowStartIso)
+      .order('posted_at', { ascending: false })
+      .limit(2000),
   ])
 
   let loadFailed = false
@@ -161,7 +208,11 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
   let dataFreshnessRows = initialCoreSnapshot().dataFreshnessRows
   let lastAnalysisAt: string | null = null
   let lastWeeklyInsightsAt: string | null = null
+  let creditSpendMtd = initialCoreSnapshot().creditSpendMtd
+  let creditTopCategories = initialCoreSnapshot().creditTopCategories
+  let monthlyTrend = initialCoreSnapshot().monthlyTrend
   let ownerResponsibility = emptyOwnerResponsibility()
+  let recentTransactions = initialCoreSnapshot().recentTransactions
 
   if (kpisResult.status === 'fulfilled' && !kpisResult.value.error) {
     kpis = normalizeKpis((kpisResult.value.data ?? null) as DashboardKpisRpc | null)
@@ -383,17 +434,41 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
     }
   }
 
+  if (dashboardTransactionsResult.status === 'fulfilled' && !dashboardTransactionsResult.value.error) {
+    const dashboardTransactionRows = (dashboardTransactionsResult.value.data ?? []) as DashboardRecentTransactionSourceRow[]
+    const creditSpendSummary = buildDashboardCreditSpendSummary(dashboardTransactionRows)
+    creditSpendMtd = creditSpendSummary.total
+    creditTopCategories = creditSpendSummary.topCategories
+    monthlyTrend = buildDashboardMonthlyTrendRows(dashboardTransactionRows as DashboardTrendSourceRow[])
+    recentTransactions = buildDashboardRecentTransactions(dashboardTransactionRows)
+  } else {
+    loadFailed = true
+    captureException(
+      dashboardTransactionsResult.status === 'rejected'
+        ? dashboardTransactionsResult.reason
+        : dashboardTransactionsResult.value.error,
+      {
+        component: 'useDashboard',
+        action: 'load-dashboard-transactions',
+      },
+    )
+  }
+
   return {
     anomalies,
     attentionCounts,
     autopilotMetrics,
+    creditSpendMtd,
+    creditTopCategories,
     dataFreshnessRows,
     errorMessage: loadFailed ? 'Some dashboard metrics could not be loaded.' : '',
     kpis,
     lastAccountSyncAt,
     lastAnalysisAt,
     lastWeeklyInsightsAt,
+    monthlyTrend,
     ownerResponsibility,
+    recentTransactions,
     upcomingRenewals,
   }
 }
