@@ -40,7 +40,7 @@ export function DashboardShiftWeekCard({ shiftSummary, shiftLoading }: Dashboard
             ? `Week of ${safeDateLabel(shiftSummary.week_start, 'MMM d')} - ${toNumber(shiftSummary.total_hours ?? null).toFixed(2)} hrs - ${formatCurrency(toNumber(shiftSummary.total_gross_pay ?? null))}`
             : "This Week's Shifts"}
         </CardTitle>
-        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Logged shifts and employer pay distribution
         </p>
       </CardHeader>

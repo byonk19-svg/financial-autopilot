@@ -1,3 +1,7 @@
+// DEPRECATED: This function is superseded by generate-weekly-insights.
+// It writes to autopilot_feed_items / autopilot_feed_preferences which are no longer in use.
+// Do not add new callers. Safe to undeploy once confirmed no active cron schedule points here.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { getCronSecret, getSupabaseConfig } from "../_shared/env.ts";

@@ -311,7 +311,7 @@ export default function CashFlow() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
             <DecisionFact
               label={openingBalanceLabel}
               value={toCurrency(openingBalance)}
@@ -837,10 +837,10 @@ function DecisionFact({ label, value, detail, tone }: DecisionFactProps) {
         : 'border-border/80 bg-card/90'
 
   return (
-    <article className={`rounded-2xl border px-4 py-4 shadow-[0_14px_34px_-32px_hsl(var(--foreground)/0.5)] ${toneClasses}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-foreground">{value}</p>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
+    <article className={`rounded-2xl border px-3 py-3 shadow-[0_14px_34px_-32px_hsl(var(--foreground)/0.5)] sm:px-4 sm:py-4 ${toneClasses}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground sm:text-xs">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-foreground sm:mt-3 sm:text-2xl">{value}</p>
+      <p className="mt-1.5 hidden text-sm leading-6 text-muted-foreground sm:mt-2 sm:block">{detail}</p>
     </article>
   )
 }
@@ -901,13 +901,13 @@ type PlannerSectionProps = {
 function PlannerSection({ title, description, children, action, defaultOpen = false }: PlannerSectionProps) {
   return (
     <details open={defaultOpen} className="section-surface overflow-hidden">
-      <summary className="flex cursor-pointer list-none flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="space-y-1">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground">Planner</p>
-          <h2 className="text-2xl font-semibold text-foreground">{title}</h2>
-          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+      <summary className="flex cursor-pointer list-none flex-row items-center justify-between gap-4 px-5 py-4 sm:px-6 sm:py-5">
+        <div className="space-y-0.5 sm:space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground sm:text-sm">Planner</p>
+          <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{title}</h2>
+          <p className="hidden max-w-3xl text-sm leading-6 text-muted-foreground sm:block">{description}</p>
         </div>
-        <span className="rounded-full border border-border/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+        <span className="shrink-0 rounded-full border border-border/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
           Expand
         </span>
       </summary>
@@ -959,13 +959,14 @@ function RunwayDayRow({ day, threshold }: RunwayDayRowProps) {
           </div>
 
           {day.entries.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {day.entries.map((entry) => (
                 <span
                   key={entry.id}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  className={`max-w-[calc(100vw-8rem)] truncate rounded-full border px-2.5 py-0.5 text-xs font-medium sm:max-w-none sm:px-3 sm:py-1 ${
                     entry.amount > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-border/80 bg-muted/35'
                   } ${entryTone(entry)}`}
+                  title={`${entryLabel(entry)}: ${entry.description} (${toSignedCurrency(entry.amount)})`}
                 >
                   {entryLabel(entry)}: {entry.description} ({toSignedCurrency(entry.amount)})
                 </span>

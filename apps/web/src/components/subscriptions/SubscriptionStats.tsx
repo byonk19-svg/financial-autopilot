@@ -58,7 +58,7 @@ export function SubscriptionStats({
       />
       <CardHeader className="space-y-2 p-4">
         <CardTitle id="subscriptions-heading" className="text-2xl md:text-3xl">
-          Recurring Charge Dashboard
+          Recurring
         </CardTitle>
         <CardDescription className="text-sm md:text-base">
           Review subscriptions, bills or loans, and low-confidence candidates in one place.

@@ -296,59 +296,57 @@ function DashboardSpendPreviewCard({
 
   return (
     <div className="rounded-3xl border border-border/75 bg-card/95 p-6 shadow-[0_10px_24px_-22px_hsl(var(--foreground)/0.35)]">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-2xl space-y-4">
-          <div>
-            <h2 id="dashboard-spend-heading" className="text-base font-semibold text-foreground">
-              Spend by Category
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Credit card purchase spend only (expenses).
-            </p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="dashboard-spend-heading" className="text-base font-semibold text-foreground">
+            Spend by Category
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Credit card purchase spend only (expenses).
+          </p>
+        </div>
+        {spendMtd > 0 && (
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Credit spend MTD</p>
+            <p className="text-xl font-semibold tabular-nums text-foreground">{formatCurrency(spendMtd)}</p>
           </div>
-          {topCategories.length > 0 ? (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Top category drivers for this month so far. Open the full chart when you want a deeper breakdown.
-              </p>
-              <div className="space-y-3">
-                {topCategories.slice(0, 5).map((row) => (
-                  <div key={row.category} className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <p className="truncate font-medium text-foreground">{row.category}</p>
-                      <p className="shrink-0 text-muted-foreground">{formatCurrency(row.amount)}</p>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted/55">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${maxAmount > 0 ? (row.amount / maxAmount) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+        )}
+      </div>
+
+      {topCategories.length > 0 ? (
+        <div className="space-y-3">
+          {topCategories.slice(0, 5).map((row) => (
+            <div key={row.category} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <p className="truncate font-medium text-foreground">{row.category}</p>
+                <p className="shrink-0 tabular-nums text-muted-foreground">{formatCurrency(row.amount)}</p>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted/55">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${maxAmount > 0 ? (row.amount / maxAmount) * 100 : 0}%` }}
+                />
               </div>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No credit-card category spend has been recorded for this month yet.
-            </p>
-          )}
+          ))}
         </div>
-        <div className="w-full max-w-xs space-y-3">
-          <div className="rounded-2xl border border-border/75 bg-muted/20 px-4 py-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Credit spend MTD</p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">{formatCurrency(spendMtd)}</p>
-          </div>
-          <Button
-            type="button"
-            className="w-full"
-            onClick={onLoad}
-            onMouseEnter={onPrefetch}
-            onFocus={onPrefetch}
-          >
-            View interactive chart
-          </Button>
-        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No credit-card category spend has been recorded for this month yet.
+        </p>
+      )}
+
+      <div className="mt-5 flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onLoad}
+          onMouseEnter={onPrefetch}
+          onFocus={onPrefetch}
+        >
+          View interactive chart
+        </Button>
       </div>
     </div>
   )
