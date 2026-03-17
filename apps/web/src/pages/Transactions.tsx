@@ -32,7 +32,7 @@ export default function Transactions() {
     setShowPending,
     showHidden,
     setShowHidden,
-    search,
+    searchInput,
     accountNameById,
     accountById,
     categoryNameById,
@@ -126,7 +126,7 @@ export default function Transactions() {
         handleViewPresetChange={handleViewPresetChange}
         hasActiveFilters={hasActiveFilters}
         removeFilterChip={removeFilterChip}
-        search={search}
+        search={searchInput}
         setShowHidden={setShowHidden}
         setShowPending={setShowPending}
         showHidden={showHidden}

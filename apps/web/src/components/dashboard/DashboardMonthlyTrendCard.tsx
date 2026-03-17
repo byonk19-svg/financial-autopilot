@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getDashboardToneUi } from '@/components/dashboard/dashboardStatus'
 import type { DashboardMonthlyTrendRow } from '@/hooks/useDashboard'
 import { toCurrency } from '@/lib/subscriptionFormatters'
 
@@ -57,10 +58,11 @@ export function DashboardMonthlyTrendCard({ rows }: DashboardMonthlyTrendCardPro
                 </span>
               </div>
 
-              <div className="grid grid-cols-6 gap-3">
+              <div className="grid grid-cols-6 gap-3" aria-hidden="true">
                 {rows.map((row) => {
                   const incomeHeight = maxValue > 0 ? (row.income / maxValue) * 100 : 0
                   const expenseHeight = maxValue > 0 ? (row.expense / maxValue) * 100 : 0
+                  const netTone = getDashboardToneUi(row.net >= 0 ? 'positive' : 'danger')
 
                   return (
                     <div key={row.monthKey} className="flex min-w-0 flex-col items-center">
@@ -79,13 +81,48 @@ export function DashboardMonthlyTrendCard({ rows }: DashboardMonthlyTrendCardPro
                         />
                       </div>
                       <p className="mt-3 text-xs font-semibold text-foreground">{row.label}</p>
-                      <p className={`mt-1 text-[11px] ${row.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                        {row.net >= 0 ? '+' : '-'}
-                        {toCurrency(Math.abs(row.net))}
+                      <p className={`mt-1 text-[11px] ${netTone.textClassName}`}>
+                        {row.net >= 0 ? 'Net surplus' : 'Net deficit'}
                       </p>
                     </div>
                   )
                 })}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border/70 bg-background/40 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-foreground">Monthly summary</h3>
+                <p className="text-xs text-muted-foreground">Semantic text equivalent of the chart</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      <th className="pr-4 font-medium">Month</th>
+                      <th className="pr-4 font-medium">Income</th>
+                      <th className="pr-4 font-medium">Expense</th>
+                      <th className="font-medium">Net</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => {
+                      const netTone = getDashboardToneUi(row.net >= 0 ? 'positive' : 'danger')
+
+                      return (
+                        <tr key={`summary-${row.monthKey}`} className="align-top">
+                          <th className="pr-4 py-1 text-left font-semibold text-foreground">{row.label}</th>
+                          <td className="pr-4 py-1 text-muted-foreground">{toCurrency(row.income)}</td>
+                          <td className="pr-4 py-1 text-muted-foreground">{toCurrency(row.expense)}</td>
+                          <td className={`py-1 ${netTone.textClassName}`}>
+                            <span className="font-medium">{row.net >= 0 ? 'Net surplus' : 'Net deficit'}</span>{' '}
+                            <span className="tabular-nums">{toCurrency(Math.abs(row.net))}</span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           </>

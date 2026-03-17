@@ -7,6 +7,7 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader'
 import { DashboardLoading } from '@/components/dashboard/DashboardLoading'
 import { DashboardMonthlyTrendCard } from '@/components/dashboard/DashboardMonthlyTrendCard'
 import { DashboardOwnerResponsibilityCard } from '@/components/dashboard/DashboardOwnerResponsibilityCard'
+import { DashboardPlannerHero } from '@/components/dashboard/DashboardPlannerHero'
 import { DashboardRecentTransactionsCard } from '@/components/dashboard/DashboardRecentTransactionsCard'
 import { DashboardStatsGrid } from '@/components/dashboard/DashboardStatsGrid'
 import { Button } from '@/components/ui/button'
@@ -68,6 +69,9 @@ export default function Dashboard() {
     renewalMonthlyTotal,
     monthlyTrend,
     recentTransactions,
+    plannerSummary,
+    plannerLoading,
+    plannerError,
     lastAccountSyncAt,
     dataFreshnessRows,
     lastAnalysisAt,
@@ -127,9 +131,15 @@ export default function Dashboard() {
     return <DashboardLoading />
   }
 
+  const attentionItemCount =
+    attentionCounts.unreadAlerts +
+    attentionCounts.uncategorizedTransactions +
+    attentionCounts.reviewSubscriptions +
+    attentionCounts.unownedAccounts
+
   return (
     <section
-      className="w-full max-w-[1400px] space-y-7 lg:space-y-8"
+      className="w-full max-w-[1400px] space-y-5 lg:space-y-6"
       aria-busy={syncing || (showSidebarSection && healthLoading)}
     >
       <DashboardHeader
@@ -142,23 +152,32 @@ export default function Dashboard() {
         onReconnect={handleReconnect}
       />
 
-      <DashboardAttentionCard counts={attentionCounts} />
-
-      <section className="grid gap-4 lg:grid-cols-2" aria-label="Autopilot and ownership metrics">
-        <DashboardAutopilotMetricsCard metrics={autopilotMetrics} />
-        <DashboardOwnerResponsibilityCard ownerResponsibility={ownerResponsibility} />
-      </section>
-
-      <DashboardStatsGrid
-        kpis={kpis}
-        anomalies={anomalies}
-        upcomingRenewals={upcomingRenewals}
+      <DashboardPlannerHero
+        summary={plannerSummary}
+        cashFlowMtd={kpis.cashFlowMtd}
         renewalMonthlyTotal={renewalMonthlyTotal}
+        attentionItemCount={attentionItemCount}
+        plannerLoading={plannerLoading}
+        plannerError={plannerError}
       />
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]" aria-label="Dashboard trends and recent activity">
-        <DashboardMonthlyTrendCard rows={monthlyTrend} />
-        <DashboardRecentTransactionsCard recentTransactions={recentTransactions} />
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_minmax(320px,0.8fr)]" aria-label="Dashboard planning support">
+        <DashboardAttentionCard counts={attentionCounts} />
+        <DashboardOwnerResponsibilityCard ownerResponsibility={ownerResponsibility} />
+        <DashboardAutopilotMetricsCard metrics={autopilotMetrics} />
+      </section>
+
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]" aria-label="Dashboard signals">
+        <DashboardStatsGrid
+          kpis={kpis}
+          anomalies={anomalies}
+          upcomingRenewals={upcomingRenewals}
+          renewalMonthlyTotal={renewalMonthlyTotal}
+        />
+        <div className="grid gap-3">
+          <DashboardMonthlyTrendCard rows={monthlyTrend} />
+          <DashboardRecentTransactionsCard recentTransactions={recentTransactions} />
+        </div>
       </section>
 
       <section aria-labelledby="dashboard-spend-heading">
@@ -177,7 +196,7 @@ export default function Dashboard() {
       </section>
 
       <DashboardDeferredSection
-        className="grid gap-5 md:grid-cols-2 xl:gap-6"
+        className="grid gap-3 md:grid-cols-2 xl:gap-4"
         fallback={<DashboardTwoColumnFallback />}
         onVisible={() => setShowSupplementalSection(true)}
       >
@@ -193,7 +212,7 @@ export default function Dashboard() {
       </DashboardDeferredSection>
 
       <DashboardDeferredSection
-        className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:gap-7"
+        className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] xl:gap-5"
         fallback={<DashboardLowerContentFallback />}
         onVisible={() => setShowSidebarSection(true)}
       >
@@ -214,7 +233,7 @@ export default function Dashboard() {
         </section>
 
         <aside
-          className="space-y-4 lg:sticky lg:top-[5.4rem] lg:self-start"
+          className="space-y-3 lg:sticky lg:top-[5.4rem] lg:self-start"
           aria-label="Dashboard sidebar"
         >
           <Suspense fallback={<DashboardSidebarFallback />}>

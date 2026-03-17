@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { PAGE_SIZE, UNCATEGORIZED_VALUE } from '@/hooks/useTransactions.helpers'
 import type {
@@ -8,6 +8,33 @@ import type {
 } from '@/lib/types'
 
 type FilterChipKey = 'view' | 'date_range' | 'account' | 'category' | 'search'
+
+export const TRANSACTION_SEARCH_DEBOUNCE_MS = 250
+
+export function createDebouncedValueCommitter<T>(
+  onCommit: (value: T) => void,
+  delayMs: number,
+) {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+
+  return {
+    schedule(value: T) {
+      if (timeout !== null) {
+        clearTimeout(timeout)
+      }
+
+      timeout = setTimeout(() => {
+        timeout = null
+        onCommit(value)
+      }, delayMs)
+    },
+    cancel() {
+      if (timeout === null) return
+      clearTimeout(timeout)
+      timeout = null
+    },
+  }
+}
 
 export function useTransactionFilters(initialSearch: string) {
   const [page, setPage] = useState(1)
@@ -25,7 +52,16 @@ export function useTransactionFilters(initialSearch: string) {
   })
   const [showPending, setShowPending] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
+  const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    const committer = createDebouncedValueCommitter(setSearch, TRANSACTION_SEARCH_DEBOUNCE_MS)
+    committer.schedule(searchInput)
+    return () => {
+      committer.cancel()
+    }
+  }, [searchInput])
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(totalCount / PAGE_SIZE)), [totalCount])
   const hasPreviousPage = page > 1
@@ -52,7 +88,7 @@ export function useTransactionFilters(initialSearch: string) {
   }, [])
 
   const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setSearch(event.target.value)
+    setSearchInput(event.target.value)
     setPage(1)
   }, [])
 
@@ -89,6 +125,8 @@ export function useTransactionFilters(initialSearch: string) {
     setAccountFilter('')
     setCategoryFilter('')
     setShowPending(false)
+    setShowHidden(false)
+    setSearchInput('')
     setSearch('')
     setPage(1)
   }, [])
@@ -100,7 +138,10 @@ export function useTransactionFilters(initialSearch: string) {
       setEndDate('')
     } else if (key === 'account') setAccountFilter('')
     else if (key === 'category') setCategoryFilter('')
-    else if (key === 'search') setSearch('')
+    else if (key === 'search') {
+      setSearchInput('')
+      setSearch('')
+    }
 
     setPage(1)
   }, [])
@@ -124,6 +165,7 @@ export function useTransactionFilters(initialSearch: string) {
     setShowPending,
     showHidden,
     setShowHidden,
+    searchInput,
     search,
     handleStartDateChange,
     handleEndDateChange,

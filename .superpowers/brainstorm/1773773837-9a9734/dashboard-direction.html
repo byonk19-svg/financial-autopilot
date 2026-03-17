@@ -1,0 +1,89 @@
+<h2>Pick the Dashboard Direction</h2>
+<p class="subtitle">Choose the overall feel first. We can tune details after the direction is locked.</p>
+
+<div class="cards">
+  <div class="card" data-choice="operations-cockpit" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. Operations Cockpit</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:12px;">
+            <div style="display:grid;gap:10px;">
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+                <div class="placeholder" style="min-height:72px;">KPI</div>
+                <div class="placeholder" style="min-height:72px;">KPI</div>
+                <div class="placeholder" style="min-height:72px;">KPI</div>
+              </div>
+              <div class="placeholder" style="min-height:160px;">Trend + spend chart focus</div>
+              <div class="placeholder" style="min-height:130px;">Recent activity / anomalies</div>
+            </div>
+            <div style="display:grid;gap:10px;">
+              <div class="placeholder" style="min-height:110px;">Attention queue</div>
+              <div class="placeholder" style="min-height:110px;">Freshness / health</div>
+              <div class="placeholder" style="min-height:110px;">Action panel</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Operations Cockpit</h3>
+      <p>Dense, analytical, scan-first. Best if you want the dashboard to feel like a control room.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="family-planner" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. Family Planner</div>
+        <div class="mockup-body">
+          <div style="display:grid;gap:10px;">
+            <div class="placeholder" style="min-height:88px;">Header with monthly priorities + sync state</div>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+              <div class="placeholder" style="min-height:120px;">Cash flow / bills</div>
+              <div class="placeholder" style="min-height:120px;">Owner responsibilities</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+              <div class="placeholder" style="min-height:88px;">Attention</div>
+              <div class="placeholder" style="min-height:88px;">Renewals</div>
+              <div class="placeholder" style="min-height:88px;">Autopilot</div>
+            </div>
+            <div class="placeholder" style="min-height:150px;">Recent transactions and guidance</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Family Planner</h3>
+      <p>Warmer, calmer, more guided. Best if you want the dashboard to feel like a planning desk instead of a monitoring wall.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="signal-board" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. Signal Board</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px;">
+            <div style="display:grid;gap:10px;">
+              <div class="placeholder" style="min-height:84px;">What needs attention now</div>
+              <div class="placeholder" style="min-height:84px;">What changed this week</div>
+              <div class="placeholder" style="min-height:84px;">Automation health</div>
+            </div>
+            <div style="display:grid;gap:10px;">
+              <div class="placeholder" style="min-height:140px;">Big visual trend story</div>
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+                <div class="placeholder" style="min-height:96px;">Recent activity</div>
+                <div class="placeholder" style="min-height:96px;">Renewals / spend themes</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Signal Board</h3>
+      <p>Editorial and insight-led. Best if you want fewer boxes and stronger hierarchy around what matters this week.</p>
+    </div>
+  </div>
+</div>

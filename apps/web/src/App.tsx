@@ -1,4 +1,3 @@
-import type { LucideIcon } from 'lucide-react'
 import {
   ActivitySquare,
   ArrowLeftRight,
@@ -9,14 +8,15 @@ import {
   LogIn,
   LogOut,
   Menu,
-  Search,
   Settings as SettingsIcon,
   Sparkles,
   Workflow,
   X,
 } from 'lucide-react'
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { NavigationCommandPalette } from './components/NavigationCommandPalette'
+import type { NavigationCommandPaletteItem } from './components/NavigationCommandPalette'
 import ErrorBoundary from './components/ErrorBoundary'
 import { captureException } from './lib/errorReporting'
 import { useSession } from './lib/session'
@@ -52,11 +52,7 @@ const ShiftLogPage = lazy(loadShiftLogPage)
 const RulesPage = lazy(loadRulesPage)
 const SettingsPage = lazy(loadSettingsPage)
 
-type NavItem = {
-  to: string
-  label: string
-  description: string
-  icon: LucideIcon
+type NavItem = NavigationCommandPaletteItem & {
   preload?: () => Promise<unknown>
 }
 type NavGroup = { label: string; items: NavItem[] }
@@ -176,7 +172,6 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [navSearch, setNavSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
-  const searchInputRef = useRef<HTMLInputElement>(null)
   const navItems = navGroups.flatMap((group) => group.items)
   const monthLabel = useMemo(
     () => new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date()),
@@ -222,32 +217,25 @@ export default function App() {
     void item.preload?.()
   }, [])
 
-  const filteredNavItems = navItems.filter((item) =>
-    item.label.toLowerCase().includes(navSearch.trim().toLowerCase()),
-  )
-  const showSearchResults = searchOpen && navSearch.trim().length > 0
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const activeTag = (document.activeElement as HTMLElement | null)?.tagName
-      const inTextInput = activeTag === 'INPUT' || activeTag === 'TEXTAREA'
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         setSearchOpen(true)
-        searchInputRef.current?.focus()
       }
-      if (event.key === '/' && !inTextInput) {
-        event.preventDefault()
-        setSearchOpen(true)
-        searchInputRef.current?.focus()
-      }
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && searchOpen) {
         setSearchOpen(false)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [searchOpen])
+
+  useEffect(() => {
+    if (!searchOpen) {
+      setNavSearch('')
+    }
+  }, [searchOpen])
 
   const renderNavGroup = (group: NavGroup) => (
     <section key={group.label}>
@@ -348,52 +336,7 @@ export default function App() {
                   <p className="mt-0.5 max-w-[32ch] truncate text-xs text-muted-foreground">{currentPageDescription}</p>
                 </div>
 
-                <div className="relative min-w-[220px] flex-1 sm:min-w-[280px]">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    ref={searchInputRef}
-                    value={navSearch}
-                    onChange={(event) => setNavSearch(event.target.value)}
-                    onFocus={() => setSearchOpen(true)}
-                    placeholder="Jump to a page..."
-                    className="h-11 w-full rounded-xl border border-border bg-card/92 pl-9 pr-20 text-sm font-medium text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                    aria-label="Search navigation pages"
-                  />
-                  <div className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-md border border-border bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground/80 md:block">
-                    Ctrl K
-                  </div>
-
-                  {showSearchResults && (
-                    <div className="absolute left-0 right-0 top-[calc(100%+0.45rem)] z-50 rounded-xl border border-border bg-card p-2 shadow-[0_22px_48px_-24px_hsl(var(--foreground)/0.45)] motion-nav-enter">
-                      {filteredNavItems.length === 0 ? (
-                        <p className="px-2 py-2 text-sm text-muted-foreground">No pages match "{navSearch}".</p>
-                      ) : (
-                        <ul className="space-y-1" role="listbox" aria-label="Navigation search results">
-                          {filteredNavItems.map((item) => {
-                            const Icon = item.icon
-                            return (
-                              <li key={item.to}>
-                                <Link
-                                  to={item.to}
-                                  onClick={onNavClick}
-                                  onMouseEnter={() => preloadRoute(item)}
-                                  onFocus={() => preloadRoute(item)}
-                                  className="inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold text-muted-foreground transition-colors-fast hover:bg-secondary hover:text-foreground"
-                                >
-                                  <span className="inline-flex items-center gap-2">
-                                    <Icon className="h-4 w-4 shrink-0" />
-                                    {item.label}
-                                  </span>
-                                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">{item.to}</span>
-                                </Link>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <div className="min-w-0 flex-1" />
 
                 <button
                   type="button"
@@ -475,6 +418,16 @@ export default function App() {
               </aside>
             </div>
           )}
+
+          <NavigationCommandPalette
+            navItems={navItems}
+            navSearch={navSearch}
+            onClose={() => setSearchOpen(false)}
+            onNavClick={onNavClick}
+            onSearchChange={(event) => setNavSearch(event.target.value)}
+            open={searchOpen}
+            preloadRoute={preloadRoute}
+          />
 
           <main id="main-content" tabIndex={-1} className="pb-10 pt-5 sm:pt-6 lg:pt-7 motion-page-enter">
             <ErrorBoundary>

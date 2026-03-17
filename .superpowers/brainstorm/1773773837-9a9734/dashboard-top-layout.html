@@ -1,0 +1,73 @@
+<h2>Pick the Top Section Layout</h2>
+<p class="subtitle">All three put cash flow and upcoming bills first. Choose the structure that feels most useful to open every day.</p>
+
+<div class="cards">
+  <div class="card" data-choice="hero-ledger" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. Hero Ledger</div>
+        <div class="mockup-body">
+          <div class="placeholder" style="min-height:110px;margin-bottom:10px;">Large monthly cash position + next 14 days bill runway</div>
+          <div style="display:grid;grid-template-columns:1.15fr 0.85fr;gap:10px;">
+            <div class="placeholder" style="min-height:145px;">Cash flow timeline</div>
+            <div style="display:grid;gap:10px;">
+              <div class="placeholder" style="min-height:66px;">Upcoming bills</div>
+              <div class="placeholder" style="min-height:66px;">Renewal total</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Hero Ledger</h3>
+      <p>One dominant planning block. Best if you want the dashboard to answer “are we on track this month?” immediately.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="two-panel-planner" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. Two-Panel Planner</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="placeholder" style="min-height:168px;">Cash flow and runway</div>
+            <div class="placeholder" style="min-height:168px;">Upcoming bills and renewals</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;">
+            <div class="placeholder" style="min-height:62px;">Attention</div>
+            <div class="placeholder" style="min-height:62px;">Autopilot</div>
+            <div class="placeholder" style="min-height:62px;">Owner split</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Two-Panel Planner</h3>
+      <p>Balanced and practical. Best if cash position and bills should feel equally important at the top.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="agenda-strip" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. Agenda Strip</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
+            <div class="placeholder" style="min-height:64px;">Cash left</div>
+            <div class="placeholder" style="min-height:64px;">Bills due soon</div>
+            <div class="placeholder" style="min-height:64px;">Renewals</div>
+            <div class="placeholder" style="min-height:64px;">Alerts</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:10px;">
+            <div class="placeholder" style="min-height:155px;">Planner timeline</div>
+            <div class="placeholder" style="min-height:155px;">Today / this week agenda</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Agenda Strip</h3>
+      <p>More dashboard-like and compact. Best if you want quick numbers first and the richer planner view right below.</p>
+    </div>
+  </div>
+</div>

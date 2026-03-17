@@ -111,6 +111,17 @@ export type DashboardAutopilotMetrics = {
   manualFixes7d: number
 }
 
+export type DashboardSummaryCountsRpc = {
+  auto_categorized_count_30d: number | string | null
+  manual_fixes_7d: number | string | null
+  review_subscriptions: number | string | null
+  total_eligible_count_30d: number | string | null
+  uncategorized_count_7d: number | string | null
+  uncategorized_transactions: number | string | null
+  unread_alerts: number | string | null
+  unowned_accounts: number | string | null
+}
+
 export type DashboardOwnerKey = 'brianna' | 'elaine' | 'household' | 'unknown'
 
 export const OWNER_ROW_ORDER: DashboardOwnerKey[] = ['brianna', 'elaine', 'household', 'unknown']

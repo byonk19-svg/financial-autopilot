@@ -6,8 +6,6 @@ import { captureException } from '../lib/errorReporting'
 import { fetchFunctionWithAuth } from '../lib/fetchWithAuth'
 import { useSession } from '../lib/session'
 
-const PENDING_SETUP_TOKEN_KEY = 'financial-autopilot:pending-setup-token'
-
 function LinkIcon() {
   return (
     <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/15 text-primary shadow-[0_14px_24px_-16px_hsl(var(--primary)/0.85)]">
@@ -27,10 +25,7 @@ function LinkIcon() {
 export default function Connect() {
   const navigate = useNavigate()
   const { session, loading } = useSession()
-  const [setupToken, setSetupToken] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    return window.sessionStorage.getItem(PENDING_SETUP_TOKEN_KEY) ?? ''
-  })
+  const [setupToken, setSetupToken] = useState('')
   const [status, setStatus] = useState<'idle' | 'checking' | 'connecting' | 'success' | 'error'>(
     'checking',
   )
@@ -65,16 +60,6 @@ export default function Connect() {
     void bootstrap()
   }, [loading, navigate, session])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const trimmed = setupToken.trim()
-    if (trimmed.length === 0) {
-      window.sessionStorage.removeItem(PENDING_SETUP_TOKEN_KEY)
-      return
-    }
-    window.sessionStorage.setItem(PENDING_SETUP_TOKEN_KEY, setupToken)
-  }, [setupToken])
-
   const onConnect = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -105,10 +90,6 @@ export default function Connect() {
           throw new Error('Unauthorized. Please log in again.')
         }
         throw new Error(payload.error ?? 'Connect request failed.')
-      }
-
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem(PENDING_SETUP_TOKEN_KEY)
       }
       setStatus('success')
       setMessage('SimpleFIN connected successfully.')

@@ -241,6 +241,12 @@ This means:
 | `0055` | `spend_by_category(start_date, end_date)` RPC for dashboard charts |
 | `0056` | Transaction type autofill trigger/backfill for null `type` values |
 | `0057` | `accounts.is_credit` trigger derivation + propagation to `transactions.is_credit` |
+| `0058` | Credit-card classification fix, part 1 |
+| `0059` | Credit-card classification fix, part 2 |
+| `0060` | `seed_user_categories` auth scoping fix |
+| `0061` | `seed_user_categories` rules literal fix |
+| `0062` | `seed_user_categories` conflict target fix |
+| `0063` | `dashboard_summary_counts()` RPC for consolidated dashboard counts |
 
 ## Non-Negotiable Behavior
 
@@ -456,39 +462,61 @@ Invoke-RestMethod -Method POST -Uri "https://jefnjglsfxwalkslctns.supabase.co/fu
 
 ## Current Priorities
 
-1. Keep sync behavior safe (no overwriting user-managed account ownership)
+1. Keep sync behavior safe and observable:
+   - no overwriting user-managed account ownership
+   - make connection/sync health easier to diagnose
 2. Maintain accurate cash flow vs spending separation
-3. Improve categorization coverage (most transactions start uncategorized; user builds rules over time)
-4. Keep recurring/review workflow simple and explainable
+3. Keep the Dashboard planning-first:
+   - checking runway first
+   - upcoming bills and near-term pressure visible
+   - utility/system status demoted
+4. Improve categorization throughput without adding rule-engine confusion
 
-## Next Chat Starter (UI Pass)
+## Next Chat Starter (Connections Health)
 
-As of March 12, 2026, a broad UI polish pass was completed on core pages and app shell:
-- New shared UI utility classes in `apps/web/src/index.css`: `page-hero`, `section-surface`, `field-control`, `btn-soft`
-- Header route descriptions added in `apps/web/src/App.tsx` nav metadata
-- Major page refreshes applied: Home, Login, Connect, Transactions, Cash Flow, Overview, Alerts, Auto Rules, Shift Log, Settings
-- Verification completed: `npm --workspace apps/web run lint` and `npm --workspace apps/web run build`
+Recommended next implementation target: add a dedicated **Connections** page for SimpleFIN connection health instead of overloading `Overview` / Accounts.
 
-### Immediate next implementation target
+Why this is next:
+- the dashboard freshness rail currently shows only rough account staleness
+- users need to know whether an account is:
+  - connected and healthy
+  - syncing now
+  - stale because feed is lagging
+  - quiet because there is no recent activity
+  - disconnected / needs reconnect
+- the app already has `Connect`, `Sync now`, `Repair last 6 months`, and active-connection checks, but no first-class diagnosis screen
 
-Focus on **mobile ergonomics + task efficiency** for the heaviest workflows:
+Recommended scope:
+1. Add a nav entry and route for `Connections`
+2. Show institutions / imported accounts with per-account health states
+3. Show:
+   - last successful sync
+   - newest posted transaction date
+   - connection status
+   - recent warnings/errors if available
+4. Provide actions:
+   - `Sync now`
+   - `Repair last 6 months`
+   - `Reconnect`
+   - `Disconnect` (only if already supported safely)
+5. Distinguish **quiet** accounts from truly **stale** accounts
 
-1. Transactions mobile usability:
-   - Reduce filter density on small screens (group/toggle strategy)
-   - Improve table readability on narrow viewports (clear horizontal-scroll affordance or mobile row/card adaptation)
-   - Keep bulk actions obvious without occupying excessive vertical space
-2. Cash Flow + Auto Rules form usability:
-   - Improve small-screen form rhythm and field grouping
-   - Ensure primary actions remain obvious without constant scrolling
-3. QA pass:
-   - Validate at `360px`, `390px`, `768px`, and desktop widths
-   - Re-run `npm --workspace apps/web run lint` and `npm --workspace apps/web run build`
+Relevant existing code seams:
+- `apps/web/src/pages/Connect.tsx`
+- `apps/web/src/hooks/useDashboard.sync.ts`
+- `apps/web/src/lib/bankConnections.ts`
+- `apps/web/src/pages/Overview.tsx`
+- `apps/web/src/hooks/useOverview.ts`
+- `supabase/functions/simplefin-sync/index.ts`
 
-### Constraints for next pass
+Constraints:
+- preserve the product rule that cash flow is checking-first and spending is credit-card-first
+- do not rewrite sync ownership logic in app code; keep DB / sync boundaries intact
+- prefer a dedicated diagnostic workflow instead of making the dashboard rail carry too much operational detail
+- if richer sync-run history is needed, add it deliberately instead of inferring too much from transaction freshness
 
-- Preserve product behavior and existing hooks/data flow; this pass is UX/layout-focused, not business-logic changes
-- Keep accessibility guardrails intact (focus states, labels, keyboard navigation)
-- Continue using existing visual language introduced in `index.css` utilities instead of adding one-off styles per page
+Suggested starting prompt for a new chat:
+`Read CLAUDE.md, then design and implement a dedicated Connections page for SimpleFIN account health using the existing sync/connect infrastructure. Prefer a dedicated page over folding this into Overview.`
 
 ## User Setup Assumptions
 
@@ -498,46 +526,68 @@ Focus on **mobile ergonomics + task efficiency** for the heaviest workflows:
 - Paychecks land in checking accounts
 - Goal is a clean, obvious, and accurate workflow with minimal manual maintenance
 
-## Latest Session Handoff (March 15, 2026)
+## Latest Session Handoff (March 17, 2026)
 
 ### Completed recently
 
-- **Dashboard SpendPreviewCard restructured** (`Dashboard.tsx`): single-column layout; "Credit spend MTD" inline in header; category bars full-width; "View interactive chart" is now a small outline button
-- **Category drill-down on Dashboard spend chart**: clicking a category in `DashboardSpendByCategoryCard` filters to show transactions for that category inline
-- **Recurring page title simplified** (`SubscriptionStats.tsx`): "Recurring Charge Dashboard" → "Recurring"
-- **ALL_CAPS subtitle removed** from `DashboardShiftWeekCard.tsx` — full-sentence subtitles must not use `uppercase tracking-wide`
-- **Transaction table polish** (`TransactionsResultsTable.tsx`):
-  - Sort indicators: replaced `'^'`/`'v'` text with `ArrowUp`/`ArrowDown`/`ArrowUpDown` Lucide icons
-  - Merchant display: `merchant_canonical || merchant_normalized`, title-cased via `toTitleCase()` helper
-- Credit-card classification fixes (`0058`, `0059` migrations) remain pushed and live
-- CashFlow decision-first redesign remains live; transaction debug fields exposed in details panel
+- **Transactions workflow fixes**:
+  - Follow-up categorization banners now render through a portal so they stay pinned to the viewport
+  - Desktop/tablet Transactions table is denser and scan-first
+  - Transactions search is debounced
+  - Visible top-of-app nav search was removed; `Ctrl+K` command palette remains
+- **Security + regression hardening**:
+  - `0060` fixes `seed_user_categories` so authenticated callers cannot target another user's UUID
+  - `0061` and `0062` were follow-up fixes uncovered during smoke testing
+  - `Connect.tsx` no longer persists the SimpleFIN setup token in browser storage
+  - Added/expanded frontend tests around `fetchWithAuth`, dashboard data loading, transaction follow-up flows, and debounced filters
+- **Dashboard performance first pass**:
+  - `0063` adds `dashboard_summary_counts()` to collapse repeated dashboard count queries
+- **Dashboard redesign**:
+  - new planner-first dashboard hero via `apps/web/src/lib/dashboardPlanner.ts` and `DashboardPlannerHero.tsx`
+  - top section now centers on projected lowest checking balance, next paycheck, bills due soon, and safe-to-spend
+  - monthly trend card now includes an accessible semantic summary table instead of being visual-only
+  - dashboard status colors now run through shared semantic helpers in `apps/web/src/components/dashboard/dashboardStatus.ts`
+  - lower-priority utility/status cards were tightened in a second density pass after real screenshot review
 
 ### Current verified state
 
-- `npm.cmd run test:unit` passes (37 tests)
+- `npm.cmd run test:unit -- apps/web/src/components/dashboard/DashboardPlannerHero.test.tsx apps/web/src/components/dashboard/DashboardMonthlyTrendCard.test.tsx apps/web/src/components/dashboard/DashboardUtilityRail.test.tsx` passes
 - `npm.cmd run lint --workspace web` passes
 - `npm.cmd run build --workspace web` passes
-- `npm.cmd run test:e2e -- tests/e2e/authenticated-flow.spec.ts` passes (7 tests)
-- `npx.cmd supabase db push --linked --yes` has been run for migrations `0058` and `0059`
+- `npx.cmd supabase db push --linked --yes` has been run for migrations `0060`, `0061`, `0062`, and `0063`
+- Manual SQL Editor verification confirmed `seed_user_categories(...)` no longer writes to a caller-supplied second user UUID
 
 ### Important current product state
 
 - Spending intentionally split from cash flow:
   - dashboard/category spend = credit-card purchase spend
   - cash flow = checking account inflows/outflows
-- Dashboard sections: KPI cards, monthly trend, recent activity, lazy spend-by-category chart (with category drill-down), deferred health/supplemental
-- CashFlow is in solid shape; next need is a mobile-tightening pass, not another structural rewrite
+- Dashboard is now a planning-first family finance desk, not a generic KPI wall
+- The dashboard "stale accounts" surface is still only a rough freshness indicator based on newest transaction age; it is not yet a real connection-health system
+- Current dashboard auth automation is limited: the available Playwright auth state redirects to `/connect`, so populated-dashboard QA still requires a real connected user session
+- There is still no UI for `transaction_category_rules_v1`; sync-time category automation is managed in Supabase directly
 
-### Bundle note
+### Important files added recently
 
-- `DashboardSpendByCategoryCard-*.js` is ~11.56 kB / 4.32 kB gzip (component itself is lean)
-- The heavy Recharts vendor chunk (`index-*.js` ~369 kB / 110 kB gzip) is lazy-loaded on demand — acceptable
+- `apps/web/src/lib/dashboardPlanner.ts`
+- `apps/web/src/components/dashboard/DashboardPlannerHero.tsx`
+- `apps/web/src/components/dashboard/dashboardStatus.ts`
+- `apps/web/src/components/NavigationCommandPalette.tsx`
+- `supabase/migrations/0060_seed_user_categories_auth_fix.sql`
+- `supabase/migrations/0061_seed_user_categories_rules_literal_fix.sql`
+- `supabase/migrations/0062_seed_user_categories_conflict_fix.sql`
+- `supabase/migrations/0063_dashboard_summary_counts_rpc.sql`
+- `docs/superpowers/specs/2026-03-17-dashboard-family-planner-redesign-design.md`
+- `docs/superpowers/plans/2026-03-17-dashboard-family-planner-redesign.md`
+- `docs/superpowers/plans/2026-03-17-security-tests-hardening.md`
 
 ### Best next task
 
-Mobile ergonomics pass for the heaviest workflows:
-1. Transactions: reduce filter density on small screens; improve table readability at narrow viewports
-2. Cash Flow: small-screen form rhythm and field grouping
-3. QA at 360px, 390px, 768px, and desktop — then re-run lint + build
+Build a dedicated **Connections** page for SimpleFIN health and repair:
+1. represent institution/account-level connection health clearly
+2. distinguish `quiet` from `stale`
+3. surface last sync / newest transaction / reconnect state
+4. wire in `Sync now` and `Repair last 6 months`
+5. keep the dashboard freshness rail lightweight, with deep-links into the new page
 
 

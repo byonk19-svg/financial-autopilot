@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCashFlow } from '@/hooks/useCashFlow'
 import { hasActiveSimplefinConnection } from '@/lib/bankConnections'
+import {
+  buildDashboardPlannerSummary,
+  type DashboardPlannerSummary,
+} from '@/lib/dashboardPlanner'
 import { captureException } from '@/lib/errorReporting'
 import { toNumber } from '@/lib/subscriptionFormatters'
 import { useDashboardData } from '@/hooks/useDashboard.data'
@@ -34,6 +39,7 @@ export type {
   DashboardAutopilotMetrics,
   DashboardDataFreshnessRow,
   DashboardKpis,
+  DashboardPlannerSummary,
   DashboardMonthlyTrendRow,
   DashboardOwnerResponsibility,
   DashboardOwnerResponsibilityRow,
@@ -73,6 +79,19 @@ export function useDashboard(userId: string | undefined, options: UseDashboardOp
     recentTransactions,
     upcomingRenewals,
   } = normalizeDashboardDataHook(useDashboardData(userId))
+
+  const {
+    loading: plannerLoading,
+    error: plannerError,
+    monthDate,
+    openingBalance,
+    lowBalanceThreshold,
+    ledger,
+    billsThisMonth,
+    projectedIncomes,
+    lowPoints,
+    summary,
+  } = useCashFlow(userId)
 
   const {
     systemHealth,
@@ -153,6 +172,19 @@ export function useDashboard(userId: string | undefined, options: UseDashboardOp
     [upcomingRenewals],
   )
 
+  const plannerSummary = useMemo<DashboardPlannerSummary>(() =>
+    buildDashboardPlannerSummary({
+      monthDate,
+      openingBalance,
+      lowBalanceThreshold,
+      ledger,
+      billsThisMonth,
+      projectedIncomes,
+      summary,
+      lowPoints,
+    }),
+  [billsThisMonth, ledger, lowBalanceThreshold, lowPoints, monthDate, openingBalance, projectedIncomes, summary])
+
   return {
     checkingConnection,
     needsConnection,
@@ -171,6 +203,9 @@ export function useDashboard(userId: string | undefined, options: UseDashboardOp
     dataFreshnessRows,
     monthlyTrend,
     recentTransactions,
+    plannerSummary,
+    plannerLoading,
+    plannerError,
     systemHealth,
     healthLoading,
     healthError,

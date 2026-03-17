@@ -12,7 +12,6 @@ import { supabase } from '@/lib/supabase'
 import {
   OWNER_LABELS,
   OWNER_ROW_ORDER,
-  daysAgoIso,
   emptyAttentionCounts,
   emptyAutopilotMetrics,
   emptyOwnerResponsibility,
@@ -32,6 +31,7 @@ import type {
   DashboardOwnerAggregate,
   DashboardOwnerKey,
   DashboardOwnerResponsibilityRow,
+  DashboardSummaryCountsRpc,
   DashboardOwnerTxRow,
   DashboardRenewalRow,
 } from '@/hooks/useDashboard.shared'
@@ -56,7 +56,7 @@ function initialCoreSnapshot(): DashboardCoreSnapshot {
   }
 }
 
-async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnapshot> {
+export async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnapshot> {
   const trendWindowStart = new Date()
   trendWindowStart.setUTCDate(1)
   trendWindowStart.setUTCMonth(trendWindowStart.getUTCMonth() - 5)
@@ -70,14 +70,7 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
     newestTransactionsResult,
     analysisResult,
     insightsResult,
-    uncategorizedResult,
-    reviewSubsResult,
-    unreadAlertsResult,
-    unownedAccountsResult,
-    totalEligibleAutoRateResult,
-    autoCategorizedResult,
-    uncategorizedLast7dResult,
-    manualFixesLast7dResult,
+    summaryCountsResult,
     ownerTransactionsMtdResult,
     dashboardTransactionsResult,
   ] = await Promise.allSettled([
@@ -114,68 +107,7 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase
-      .from('transactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_deleted', false)
-      .eq('is_pending', false)
-      .eq('is_hidden', false)
-      .eq('is_credit', true)
-      .is('category_id', null)
-      .is('user_category_id', null)
-      .neq('type', 'transfer'),
-    supabase
-      .from('subscriptions')
-      .select('*', { count: 'exact', head: true })
-      .eq('classification', 'needs_review'),
-    supabase
-      .from('autopilot_alerts')
-      .select('*', { count: 'exact', head: true })
-      .is('dismissed_at', null),
-    supabase
-      .from('accounts')
-      .select('*', { count: 'exact', head: true })
-      .is('owner', null),
-    supabase
-      .from('transactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_deleted', false)
-      .eq('is_pending', false)
-      .eq('is_hidden', false)
-      .eq('is_credit', true)
-      .neq('type', 'transfer')
-      .gte('posted_at', daysAgoIso(30)),
-    supabase
-      .from('transactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_deleted', false)
-      .eq('is_pending', false)
-      .eq('is_hidden', false)
-      .eq('is_credit', true)
-      .neq('type', 'transfer')
-      .eq('category_source', 'rule')
-      .gte('posted_at', daysAgoIso(30)),
-    supabase
-      .from('transactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_deleted', false)
-      .eq('is_pending', false)
-      .eq('is_hidden', false)
-      .eq('is_credit', true)
-      .neq('type', 'transfer')
-      .is('category_id', null)
-      .is('user_category_id', null)
-      .gte('posted_at', daysAgoIso(7)),
-    supabase
-      .from('transactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_deleted', false)
-      .eq('is_pending', false)
-      .eq('is_hidden', false)
-      .eq('is_credit', true)
-      .neq('type', 'transfer')
-      .eq('category_source', 'user')
-      .gte('updated_at', daysAgoIso(7)),
+    supabase.rpc('dashboard_summary_counts'),
     supabase
       .from('transactions')
       .select('owner, type, amount')
@@ -331,41 +263,35 @@ async function fetchDashboardSnapshot(userId: string): Promise<DashboardCoreSnap
     })
   }
 
-  const attentionCounts = {
-    uncategorizedTransactions:
-      uncategorizedResult.status === 'fulfilled' && !uncategorizedResult.value.error
-        ? (uncategorizedResult.value.count ?? 0)
-        : 0,
-    reviewSubscriptions:
-      reviewSubsResult.status === 'fulfilled' && !reviewSubsResult.value.error
-        ? (reviewSubsResult.value.count ?? 0)
-        : 0,
-    unreadAlerts:
-      unreadAlertsResult.status === 'fulfilled' && !unreadAlertsResult.value.error
-        ? (unreadAlertsResult.value.count ?? 0)
-        : 0,
-    unownedAccounts:
-      unownedAccountsResult.status === 'fulfilled' && !unownedAccountsResult.value.error
-        ? (unownedAccountsResult.value.count ?? 0)
-        : 0,
+  const summaryCounts =
+    summaryCountsResult.status === 'fulfilled' && !summaryCountsResult.value.error
+      ? ((summaryCountsResult.value.data ?? null) as DashboardSummaryCountsRpc | null)
+      : null
+
+  if (summaryCountsResult.status === 'fulfilled' && summaryCountsResult.value.error) {
+    captureException(summaryCountsResult.value.error, {
+      component: 'useDashboard',
+      action: 'load-dashboard-summary-counts',
+    })
+  }
+  if (summaryCountsResult.status === 'rejected') {
+    captureException(summaryCountsResult.reason, {
+      component: 'useDashboard',
+      action: 'load-dashboard-summary-counts',
+    })
   }
 
-  const totalEligibleCount30d =
-    totalEligibleAutoRateResult.status === 'fulfilled' && !totalEligibleAutoRateResult.value.error
-      ? (totalEligibleAutoRateResult.value.count ?? 0)
-      : 0
-  const autoCategorizedCount30d =
-    autoCategorizedResult.status === 'fulfilled' && !autoCategorizedResult.value.error
-      ? (autoCategorizedResult.value.count ?? 0)
-      : 0
-  const uncategorizedCount7d =
-    uncategorizedLast7dResult.status === 'fulfilled' && !uncategorizedLast7dResult.value.error
-      ? (uncategorizedLast7dResult.value.count ?? 0)
-      : 0
-  const manualFixes7d =
-    manualFixesLast7dResult.status === 'fulfilled' && !manualFixesLast7dResult.value.error
-      ? (manualFixesLast7dResult.value.count ?? 0)
-      : 0
+  const attentionCounts = {
+    uncategorizedTransactions: toNumber(summaryCounts?.uncategorized_transactions ?? 0),
+    reviewSubscriptions: toNumber(summaryCounts?.review_subscriptions ?? 0),
+    unreadAlerts: toNumber(summaryCounts?.unread_alerts ?? 0),
+    unownedAccounts: toNumber(summaryCounts?.unowned_accounts ?? 0),
+  }
+
+  const totalEligibleCount30d = toNumber(summaryCounts?.total_eligible_count_30d ?? 0)
+  const autoCategorizedCount30d = toNumber(summaryCounts?.auto_categorized_count_30d ?? 0)
+  const uncategorizedCount7d = toNumber(summaryCounts?.uncategorized_count_7d ?? 0)
+  const manualFixes7d = toNumber(summaryCounts?.manual_fixes_7d ?? 0)
 
   const autopilotMetrics = {
     autoCategorizedRatePct:

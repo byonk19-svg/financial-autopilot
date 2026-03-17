@@ -509,47 +509,50 @@ export default function CashFlow() {
           title="Month settings"
           description="Set the opening checking balance and the comfort floor you want the forecast to protect."
           defaultOpen
-          action={
-            <button
-              type="button"
-              onClick={onSaveMonthSettings}
-              className="btn-soft bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={saving}
-            >
-              {saving ? 'Saving...' : 'Save settings'}
-            </button>
-          }
         >
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-foreground">Opening balance</span>
-              <input
-                type="number"
-                step="0.01"
-                value={openingBalanceDraft}
-                onChange={(event) => setOpeningBalanceDraft(event.target.value)}
-                className="field-control"
-              />
-              <p className="text-xs leading-5 text-muted-foreground">
-                {isBalanceInferred
-                  ? 'This month is currently using an inferred estimate from recent checking activity.'
-                  : 'This month is using the manual starting balance you saved.'}
-              </p>
-            </label>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-foreground">Opening balance</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={openingBalanceDraft}
+                  onChange={(event) => setOpeningBalanceDraft(event.target.value)}
+                  className="field-control"
+                />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {isBalanceInferred
+                    ? 'This month is currently using an inferred estimate from recent checking activity.'
+                    : 'This month is using the manual starting balance you saved.'}
+                </p>
+              </label>
 
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-foreground">Low balance threshold</span>
-              <input
-                type="number"
-                step="0.01"
-                value={lowThresholdDraft}
-                onChange={(event) => setLowThresholdDraft(event.target.value)}
-                className="field-control"
-              />
-              <p className="text-xs leading-5 text-muted-foreground">
-                When projected checking drops below this line, the page switches from calm to caution.
-              </p>
-            </label>
+              <label className="space-y-2 text-sm">
+                <span className="font-medium text-foreground">Low balance threshold</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={lowThresholdDraft}
+                  onChange={(event) => setLowThresholdDraft(event.target.value)}
+                  className="field-control"
+                />
+                <p className="text-xs leading-5 text-muted-foreground">
+                  When projected checking drops below this line, the page switches from calm to caution.
+                </p>
+              </label>
+            </div>
+
+            <div className="flex justify-end border-t border-border/70 pt-4">
+              <button
+                type="button"
+                onClick={onSaveMonthSettings}
+                className="btn-soft w-full justify-center bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto"
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : 'Save settings'}
+              </button>
+            </div>
           </div>
         </PlannerSection>
 
@@ -560,13 +563,16 @@ export default function CashFlow() {
         >
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
             <form
-              className="grid gap-3 rounded-2xl border border-border/75 bg-muted/15 p-4"
+              className="grid gap-4 rounded-2xl border border-border/75 bg-muted/15 p-4"
               onSubmit={(event) => {
                 event.preventDefault()
                 void onAddBill()
               }}
             >
-              <h3 className="text-lg font-semibold text-foreground">Add recurring bill</h3>
+              <div className="space-y-1">
+                <h3 className="text-lg font-semibold text-foreground">Add recurring bill</h3>
+                <p className="text-sm text-muted-foreground">Keep this quick: name, amount, due day, then save.</p>
+              </div>
               <label className="space-y-2 text-sm">
                 <span className="font-medium text-foreground">Name</span>
                 <input
@@ -630,7 +636,7 @@ export default function CashFlow() {
               </div>
               <button
                 type="submit"
-                className="btn-soft bg-primary text-primary-foreground hover:bg-primary/90"
+                className="btn-soft w-full justify-center bg-primary text-primary-foreground hover:bg-primary/90"
                 disabled={saving}
               >
                 {saving ? 'Saving...' : 'Add recurring bill'}
@@ -663,12 +669,12 @@ export default function CashFlow() {
                             Due on day {template.due_day_of_month} • {template.category}
                           </p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
                           <p className="text-base font-semibold text-foreground">{toCurrency(Math.abs(Number(template.amount)))}</p>
                           <button
                             type="button"
                             onClick={() => void toggleBillTemplate(template.id, !template.is_active)}
-                            className="btn-soft"
+                            className="btn-soft w-full justify-center sm:w-auto"
                           >
                             {template.is_active ? 'Disable' : 'Enable'}
                           </button>
@@ -692,13 +698,16 @@ export default function CashFlow() {
         >
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
             <form
-              className="grid gap-3 rounded-2xl border border-border/75 bg-muted/15 p-4"
+              className="grid gap-4 rounded-2xl border border-border/75 bg-muted/15 p-4"
               onSubmit={(event) => {
                 event.preventDefault()
                 void onAddProjectedIncome()
               }}
             >
-              <h3 className="text-lg font-semibold text-foreground">Add projected income</h3>
+              <div className="space-y-1">
+                <h3 className="text-lg font-semibold text-foreground">Add projected income</h3>
+                <p className="text-sm text-muted-foreground">Enter the next paycheck or deposit so the warning window stays honest.</p>
+              </div>
               <label className="space-y-2 text-sm">
                 <span className="font-medium text-foreground">Expected date</span>
                 <input
@@ -747,7 +756,7 @@ export default function CashFlow() {
               </label>
               <button
                 type="submit"
-                className="btn-soft bg-primary text-primary-foreground hover:bg-primary/90"
+                className="btn-soft w-full justify-center bg-primary text-primary-foreground hover:bg-primary/90"
                 disabled={saving}
               >
                 {saving ? 'Saving...' : 'Add projected income'}
@@ -769,12 +778,12 @@ export default function CashFlow() {
                             {format(parseISO(income.expected_date), 'MMM d')} {employer ? `• ${employer.name}` : ''}
                           </p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
                           <p className="text-base font-semibold text-emerald-700">{toCurrency(Number(income.amount))}</p>
                           <button
                             type="button"
                             onClick={() => void removeProjectedIncome(income.id)}
-                            className="btn-soft"
+                            className="btn-soft w-full justify-center sm:w-auto"
                           >
                             Remove
                           </button>
@@ -905,10 +914,10 @@ function PlannerSection({ title, description, children, action, defaultOpen = fa
         <div className="space-y-0.5 sm:space-y-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground sm:text-sm">Planner</p>
           <h2 className="text-xl font-semibold text-foreground sm:text-2xl">{title}</h2>
-          <p className="hidden max-w-3xl text-sm leading-6 text-muted-foreground sm:block">{description}</p>
+          <p className="max-w-3xl text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">{description}</p>
         </div>
         <span className="shrink-0 rounded-full border border-border/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-          Expand
+          Open
         </span>
       </summary>
       <div className="border-t border-border/70 px-5 py-5 sm:px-6">

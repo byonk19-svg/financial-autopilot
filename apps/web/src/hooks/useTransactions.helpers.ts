@@ -11,6 +11,15 @@ export const TRANSACTION_VIEW_PRESETS: Array<{ value: TransactionViewPreset; lab
 
 export const PAGE_SIZE = 50
 
+type TransactionsAdvancedFilterSummaryParams = {
+  startDate: string
+  endDate: string
+  accountFilter: string
+  categoryFilter: string
+  showPending: boolean
+  showHidden: boolean
+}
+
 export const FALLBACK_CATEGORY_NAMES = [
   'Payroll - Brianna',
   'Payroll - Elaine',
@@ -112,6 +121,29 @@ export function buildSearchAndCategoryOrFilter(categoryId: string, searchQuery: 
   if (categoryPredicates.length) return categoryPredicates.join(',')
   if (searchPredicates.length) return searchPredicates.join(',')
   return null
+}
+
+export function describeTransactionsAdvancedFilters({
+  startDate,
+  endDate,
+  accountFilter,
+  categoryFilter,
+  showPending,
+  showHidden,
+}: TransactionsAdvancedFilterSummaryParams): string {
+  const active: string[] = []
+
+  if (startDate || endDate) active.push('date range')
+  if (accountFilter) active.push('account')
+  if (categoryFilter) active.push('category')
+  if (showPending) active.push('show pending')
+  if (showHidden) active.push('show hidden')
+
+  if (active.length === 0) {
+    return 'Dates, account, category, and visibility controls'
+  }
+
+  return `${active.length} active: ${active.join(', ')}`
 }
 
 export function detectCanonicalMerchant(transaction: TransactionRow): string {
